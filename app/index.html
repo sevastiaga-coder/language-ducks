@@ -118,12 +118,12 @@
       return;
     }
     joinBtn.disabled = true;
-    const savedId = localStorage.getItem("playerId");
+    const savedId = sessionStorage.getItem("playerId");
     const result = await joinGame({ id: savedId, name: name });
     if (result.ok) {
       myPlayerId = result.id;
-      localStorage.setItem("playerId", result.id);
-      localStorage.setItem("playerName", result.name);
+      sessionStorage.setItem("playerId", result.id);
+      sessionStorage.setItem("playerName", result.name);
       const info = await fetchGameInfo(myPlayerId);
       showWaiting(result.name);
       renderWaitingState(info);
@@ -150,7 +150,7 @@
   });
 
   async function init() {
-    const savedId = localStorage.getItem("playerId");
+    const savedId = sessionStorage.getItem("playerId");
     if (savedId) {
       const result = await joinGame({ id: savedId });
       if (result.ok) {
@@ -160,8 +160,8 @@
         renderWaitingState(info);
         return;
       }
-      localStorage.removeItem("playerId");
-      localStorage.removeItem("playerName");
+      sessionStorage.removeItem("playerId");
+      sessionStorage.removeItem("playerName");
     }
 
     const info = await fetchGameInfo();
