@@ -33,21 +33,36 @@ game_state = {
 
 
 def handle_join(payload):
-    """Обрабатывает вход игрока или проверку уже сохранённого id.
+    """Обрабатывает вход игрока, переименование или проверку сохранённого id.
 
-    Если пришёл известный id — просто подтверждаем, что игрок уже в игре
-    (это нужно, чтобы обновление страницы на телефоне не создавало
-    второго игрока). Если id нет или он не найден (например, сервер
-    перезапустили) — пробуем завести нового игрока по имени.
+    Если пришёл известный id — это тот же телефон, что уже играет.
+    Если вместе с id пришло новое имя — переименовываем игрока, а не
+    заводим второго (иначе при повторном входе на экране появлялся бы
+    дубль). Если имени нет или оно не изменилось — просто подтверждаем,
+    что игрок уже в игре (нужно для обновления страницы на телефоне).
+    Если id нет или он не найден (например, сервер перезапустили) —
+    пробуем завести нового игрока по имени.
     """
     player_id = payload.get("id")
     raw_name = payload.get("name") or ""
     name = raw_name.strip()[:MAX_NAME_LENGTH]
 
     if player_id:
+        existing_player = None
         for player in game_state["players"]:
             if player["id"] == player_id:
-                return {"ok": True, "id": player["id"], "name": player["name"]}
+                existing_player = player
+                break
+
+        if existing_player:
+            if not name or name.lower() == existing_player["name"].lower():
+                return {"ok": True, "id": existing_player["id"], "name": existing_player["name"]}
+            for player in game_state["players"]:
+                if player is not existing_player and player["name"].lower() == name.lower():
+                    return {"ok": False, "error": "Такое имя уже занято, выбери другое"}
+            existing_player["name"] = name
+            return {"ok": True, "id": existing_player["id"], "name": existing_player["name"]}
+
         if not name:
             return {"ok": False, "error": "Игра началась заново, зайди ещё раз"}
 

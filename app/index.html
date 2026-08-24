@@ -55,7 +55,8 @@
       return;
     }
     joinBtn.disabled = true;
-    const result = await joinGame({ name: name });
+    const savedId = localStorage.getItem("playerId");
+    const result = await joinGame({ id: savedId, name: name });
     if (result.ok) {
       localStorage.setItem("playerId", result.id);
       localStorage.setItem("playerName", result.name);
