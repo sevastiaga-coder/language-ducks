@@ -26,15 +26,23 @@
 <script src="app.js"></script>
 <script>
   const MAX_PLAYERS = 10;
+  let previousNames = new Set();
 
-  function renderEmptySlots() {
+  function renderPlayers(names) {
     const grid = document.getElementById("players-grid");
     grid.innerHTML = "";
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const slot = document.createElement("div");
-      slot.className = "player-slot";
+      if (i < names.length) {
+        const name = names[i];
+        slot.className = "player-slot filled" + (previousNames.has(name) ? "" : " appear");
+        slot.textContent = name;
+      } else {
+        slot.className = "player-slot";
+      }
       grid.appendChild(slot);
     }
+    previousNames = new Set(names);
   }
 
   async function updateInfo() {
@@ -43,12 +51,13 @@
       document.getElementById("join-address").textContent = info.address;
       document.getElementById("players-count").textContent =
         "Игроков: " + info.playerCount + " из " + MAX_PLAYERS;
+      renderPlayers(info.players);
     } catch (error) {
       document.getElementById("join-address").textContent = "нет связи с сервером";
     }
   }
 
-  renderEmptySlots();
+  renderPlayers([]);
   updateInfo();
   setInterval(updateInfo, 1000);
 </script>

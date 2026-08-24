@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Language Ducks — вход</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="phone-body">
+<div class="phone-screen">
+  <h1 class="phone-title">LANGUAGE DUCKS</h1>
+
+  <div id="join-view" class="join-view">
+    <label class="field-label" for="name-input">Как тебя зовут?</label>
+    <input id="name-input" class="name-input" type="text" maxlength="12" autocomplete="off" placeholder="Твоё имя">
+    <button id="join-btn" class="primary-btn" disabled>ИГРАТЬ</button>
+    <div id="join-hint" class="join-hint"></div>
+  </div>
+
+  <div id="waiting-view" class="waiting-view" hidden>
+    <div class="waiting-name">Ты играешь как <span id="player-name-label"></span></div>
+    <div class="waiting-text">Жди начала игры</div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+  const nameInput = document.getElementById("name-input");
+  const joinBtn = document.getElementById("join-btn");
+  const joinHint = document.getElementById("join-hint");
+  const joinView = document.getElementById("join-view");
+  const waitingView = document.getElementById("waiting-view");
+  const playerNameLabel = document.getElementById("player-name-label");
+
+  function showWaiting(name) {
+    playerNameLabel.textContent = name;
+    joinView.hidden = true;
+    waitingView.hidden = false;
+  }
+
+  function showJoinForm() {
+    joinView.hidden = false;
+    waitingView.hidden = true;
+  }
+
+  nameInput.addEventListener("input", () => {
+    joinBtn.disabled = nameInput.value.trim().length === 0;
+    joinHint.textContent = "";
+  });
+
+  async function join() {
+    const name = nameInput.value.trim();
+    if (!name) {
+      return;
+    }
+    joinBtn.disabled = true;
+    const result = await joinGame({ name: name });
+    if (result.ok) {
+      localStorage.setItem("playerId", result.id);
+      localStorage.setItem("playerName", result.name);
+      showWaiting(result.name);
+    } else {
+      joinHint.textContent = result.error;
+      joinBtn.disabled = false;
+    }
+  }
+
+  joinBtn.addEventListener("click", join);
+  nameInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !joinBtn.disabled) {
+      join();
+    }
+  });
+
+  async function checkExistingPlayer() {
+    const savedId = localStorage.getItem("playerId");
+    if (!savedId) {
+      return;
+    }
+    const result = await joinGame({ id: savedId });
+    if (result.ok) {
+      showWaiting(result.name);
+    } else {
+      localStorage.removeItem("playerId");
+      localStorage.removeItem("playerName");
+      showJoinForm();
+    }
+  }
+
+  checkExistingPlayer();
+</script>
+</body>
+</html>

@@ -15,17 +15,55 @@ Language Ducks — маленький сервер для игры.
 
 import json
 import socket
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 PORT = 8000
 APP_DIR = Path(__file__).resolve().parent
+MAX_PLAYERS = 10
+MAX_NAME_LENGTH = 12
 
 # Состояние игры целиком живёт здесь, в памяти сервера.
-# Дальше, в следующих частях, сюда добавятся игроки, вопросы, очки и т.д.
+# Дальше, в следующих частях, сюда добавятся вопросы, очки и т.д.
+# players — список словарей вида {"id": "...", "name": "..."}.
 game_state = {
     "players": [],
 }
+
+
+def handle_join(payload):
+    """Обрабатывает вход игрока или проверку уже сохранённого id.
+
+    Если пришёл известный id — просто подтверждаем, что игрок уже в игре
+    (это нужно, чтобы обновление страницы на телефоне не создавало
+    второго игрока). Если id нет или он не найден (например, сервер
+    перезапустили) — пробуем завести нового игрока по имени.
+    """
+    player_id = payload.get("id")
+    raw_name = payload.get("name") or ""
+    name = raw_name.strip()[:MAX_NAME_LENGTH]
+
+    if player_id:
+        for player in game_state["players"]:
+            if player["id"] == player_id:
+                return {"ok": True, "id": player["id"], "name": player["name"]}
+        if not name:
+            return {"ok": False, "error": "Игра началась заново, зайди ещё раз"}
+
+    if not name:
+        return {"ok": False, "error": "Введи имя"}
+
+    if len(game_state["players"]) >= MAX_PLAYERS:
+        return {"ok": False, "error": "Игроков уже 10 — новых мест нет"}
+
+    for player in game_state["players"]:
+        if player["name"].lower() == name.lower():
+            return {"ok": False, "error": "Такое имя уже занято, выбери другое"}
+
+    new_player = {"id": uuid.uuid4().hex, "name": name}
+    game_state["players"].append(new_player)
+    return {"ok": True, "id": new_player["id"], "name": new_player["name"]}
 
 
 def get_local_ip():
@@ -66,7 +104,9 @@ class GameRequestHandler(BaseHTTPRequestHandler):
     def serve_file(self, filename):
         file_path = APP_DIR / filename
         if not file_path.is_file():
-            self.send_error(404, "Файл не найден")
+            # Сообщение об ошибке должно быть латиницей — иначе сервер
+            # падает при запросе, например, браузером /favicon.ico.
+            self.send_error(404, "Not found")
             return
 
         content_types = {
@@ -90,15 +130,31 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             self.send_json({
                 "address": "{}:{}".format(LOCAL_IP, PORT),
                 "playerCount": len(game_state["players"]),
+                "players": [player["name"] for player in game_state["players"]],
             })
             return
 
         if path == "/":
-            self.serve_file("screen.html")
+            self.serve_file("index.html")
             return
 
         # Убираем ведущий "/", чтобы отдать файл из папки app/
         self.serve_file(path.lstrip("/"))
+
+    def do_POST(self):
+        path = self.path.split("?")[0]
+
+        if path == "/api/join":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw_body = self.rfile.read(length) if length else b"{}"
+            try:
+                payload = json.loads(raw_body.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                payload = {}
+            self.send_json(handle_join(payload))
+            return
+
+        self.send_error(404, "Not found")
 
 
 def main():
