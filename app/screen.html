@@ -16,10 +16,14 @@
     <div class="join-hint">Зайди с телефона по этому адресу</div>
   </div>
 
-  <div class="players-panel">
+  <div class="players-panel" id="players-panel">
     <div class="players-waiting">Ждём игроков</div>
     <div class="players-grid" id="players-grid"></div>
     <div class="players-count" id="players-count">Игроков: 0 из 10</div>
+  </div>
+
+  <div class="playing-panel" id="playing-panel" hidden>
+    <div class="playing-announcement">ИГРА НАЧАЛАСЬ</div>
   </div>
 </div>
 
@@ -48,6 +52,20 @@
   async function updateInfo() {
     try {
       const info = await fetchGameInfo();
+      const joinPanel = document.querySelector(".join-panel");
+      const playersPanel = document.getElementById("players-panel");
+      const playingPanel = document.getElementById("playing-panel");
+
+      if (info.phase === "playing") {
+        joinPanel.hidden = true;
+        playersPanel.hidden = true;
+        playingPanel.hidden = false;
+        return;
+      }
+
+      joinPanel.hidden = false;
+      playersPanel.hidden = false;
+      playingPanel.hidden = true;
       document.getElementById("join-address").textContent = info.address;
       document.getElementById("players-count").textContent =
         "Игроков: " + info.playerCount + " из " + MAX_PLAYERS;

@@ -156,6 +156,30 @@ body {
   animation: playerAppear .6s ease;
 }
 
+.playing-panel {
+  width: 100%;
+  background: var(--panel);
+  border: var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--glow-panel);
+  padding: 60px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.playing-announcement {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(36px, 6vw, 72px);
+  color: var(--accent);
+  -webkit-text-stroke: 2px var(--main);
+  paint-order: stroke fill;
+  text-shadow: var(--glow-word);
+  letter-spacing: .04em;
+  text-align: center;
+}
+
 @keyframes playerAppear {
   from {
     box-shadow: 0 0 30px rgba(53,216,255,.9);
@@ -284,4 +308,18 @@ body {
 .waiting-text {
   font-size: 22px;
   color: var(--main);
+}
+
+.host-controls {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.guest-note {
+  font-size: 18px;
+  color: var(--text-dim);
+  text-align: center;
 }

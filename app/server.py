@@ -18,17 +18,25 @@ import socket
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 PORT = 8000
 APP_DIR = Path(__file__).resolve().parent
 MAX_PLAYERS = 10
+MIN_PLAYERS = 2
 MAX_NAME_LENGTH = 12
 
 # Состояние игры целиком живёт здесь, в памяти сервера.
 # Дальше, в следующих частях, сюда добавятся вопросы, очки и т.д.
-# players — список словарей вида {"id": "...", "name": "..."}.
+# players — список словарей вида {"id": "...", "name": "..."}. Первый
+# в списке — это игрок, который зашёл раньше всех, и только он может
+# начать игру.
+# phase — в какой фазе сейчас игра: "lobby" (собираем игроков),
+# "playing" (игра идёт), "final" (финал). Следующие части будут
+# показывать разное в зависимости от этого поля.
 game_state = {
     "players": [],
+    "phase": "lobby",
 }
 
 
@@ -55,6 +63,9 @@ def handle_join(payload):
                 break
 
         if existing_player:
+            # Свой игрок — заходит заново или переименовывается, это можно
+            # в любой фазе игры, иначе ведущий потеряет свою кнопку «Начать»
+            # при обновлении страницы.
             if not name or name.lower() == existing_player["name"].lower():
                 return {"ok": True, "id": existing_player["id"], "name": existing_player["name"]}
             for player in game_state["players"]:
@@ -63,8 +74,14 @@ def handle_join(payload):
             existing_player["name"] = name
             return {"ok": True, "id": existing_player["id"], "name": existing_player["name"]}
 
+        if game_state["phase"] != "lobby":
+            return {"ok": False, "error": "Игра уже началась, подожди следующую"}
+
         if not name:
             return {"ok": False, "error": "Игра началась заново, зайди ещё раз"}
+
+    if game_state["phase"] != "lobby":
+        return {"ok": False, "error": "Игра уже началась, подожди следующую"}
 
     if not name:
         return {"ok": False, "error": "Введи имя"}
@@ -79,6 +96,27 @@ def handle_join(payload):
     new_player = {"id": uuid.uuid4().hex, "name": name}
     game_state["players"].append(new_player)
     return {"ok": True, "id": new_player["id"], "name": new_player["name"]}
+
+
+def handle_start(payload):
+    """Обрабатывает нажатие «Начать игру» на телефоне ведущего.
+
+    Начать может только самый первый зашедший игрок, и только пока
+    игра ещё в лобби, и только если игроков минимум двое.
+    """
+    player_id = payload.get("id")
+
+    if game_state["phase"] != "lobby":
+        return {"ok": True}
+
+    if not game_state["players"] or game_state["players"][0]["id"] != player_id:
+        return {"ok": False, "error": "Начать игру может только тот, кто зашёл первым"}
+
+    if len(game_state["players"]) < MIN_PLAYERS:
+        return {"ok": False, "error": "Нужен хотя бы ещё один игрок"}
+
+    game_state["phase"] = "playing"
+    return {"ok": True}
 
 
 def get_local_ip():
@@ -139,13 +177,23 @@ class GameRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        path = self.path.split("?")[0]
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
 
         if path == "/api/info":
+            query = parse_qs(parsed_url.query)
+            player_id = (query.get("id") or [None])[0]
+            is_host = bool(
+                player_id
+                and game_state["players"]
+                and game_state["players"][0]["id"] == player_id
+            )
             self.send_json({
                 "address": "{}:{}".format(LOCAL_IP, PORT),
                 "playerCount": len(game_state["players"]),
                 "players": [player["name"] for player in game_state["players"]],
+                "phase": game_state["phase"],
+                "isHost": is_host,
             })
             return
 
@@ -167,6 +215,16 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 payload = {}
             self.send_json(handle_join(payload))
+            return
+
+        if path == "/api/start":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw_body = self.rfile.read(length) if length else b"{}"
+            try:
+                payload = json.loads(raw_body.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                payload = {}
+            self.send_json(handle_start(payload))
             return
 
         self.send_error(404, "Not found")
