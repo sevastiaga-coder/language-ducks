@@ -1,0 +1,144 @@
+:root {
+  --bg:            #0B1026;
+  --panel:         #141A3A;
+  --card:          #1B2350;
+  --card-ok:       #1B2A55;
+  --main:          #35D8FF;
+  --accent:        #FFE14D;
+  --text:          #DCE6FF;
+  --text-dim:      rgba(220,230,255,.62);
+  --on-accent:     #06122B;
+
+  --font-head: Orbitron, "Trebuchet MS", system-ui, sans-serif;
+  --font-body: Rubik, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius:    18px;
+  --radius-s:  12px;
+
+  --edge:      1px solid rgba(53,216,255,.55);
+  --card-edge: 1px solid rgba(120,150,255,.30);
+  --ok-edge:   2px solid #FFE14D;
+  --divider:   1px solid rgba(120,150,255,.25);
+
+  --glow-panel:  0 0 40px rgba(53,216,255,.18);
+  --glow-btn:    0 0 26px rgba(255,225,77,.55);
+  --glow-ok:     0 0 22px rgba(255,225,77,.35);
+  --glow-word:   0 0 18px rgba(53,216,255,.85), 0 0 40px rgba(255,225,77,.35);
+
+  --bg-lights:
+    radial-gradient(ellipse at 20% 0%,   rgba(53,216,255,.16), transparent 55%),
+    radial-gradient(ellipse at 90% 100%, rgba(255,225,77,.10), transparent 50%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg) var(--bg-lights) no-repeat fixed;
+  color: var(--text);
+  font-family: var(--font-body);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.screen {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.game-title {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(32px, 5vw, 56px);
+  color: var(--accent);
+  -webkit-text-stroke: 2px var(--main);
+  paint-order: stroke fill;
+  text-shadow: var(--glow-word);
+  letter-spacing: .04em;
+  text-align: center;
+  margin: 0;
+}
+
+.join-panel {
+  width: 100%;
+  background: var(--panel);
+  border: var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--glow-panel);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.join-address {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(48px, 9vw, 110px);
+  color: var(--on-accent);
+  background: var(--accent);
+  border: var(--ok-edge);
+  border-radius: var(--radius-s);
+  box-shadow: var(--glow-btn);
+  padding: 8px 32px;
+  text-align: center;
+}
+
+.join-hint {
+  font-size: 18px;
+  color: var(--main);
+  text-align: center;
+}
+
+.players-panel {
+  width: 100%;
+  background: var(--panel);
+  border: var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--glow-panel);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.players-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.player-slot {
+  height: 60px;
+  border-radius: var(--radius-s);
+  border: 1px dashed rgba(120,150,255,.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: var(--text-dim);
+}
+
+.players-waiting {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 18px;
+}
+
+.players-count {
+  text-align: center;
+  font-family: var(--font-head);
+  font-weight: 800;
+  color: var(--text-dim);
+  font-size: 18px;
+}

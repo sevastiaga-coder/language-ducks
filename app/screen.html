@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Language Ducks — экран</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="screen">
+  <h1 class="game-title">LANGUAGE DUCKS</h1>
+
+  <div class="join-panel">
+    <div class="join-address" id="join-address">...</div>
+    <div class="join-hint">Зайди с телефона по этому адресу</div>
+  </div>
+
+  <div class="players-panel">
+    <div class="players-waiting">Ждём игроков</div>
+    <div class="players-grid" id="players-grid"></div>
+    <div class="players-count" id="players-count">Игроков: 0 из 10</div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+  const MAX_PLAYERS = 10;
+
+  function renderEmptySlots() {
+    const grid = document.getElementById("players-grid");
+    grid.innerHTML = "";
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const slot = document.createElement("div");
+      slot.className = "player-slot";
+      grid.appendChild(slot);
+    }
+  }
+
+  async function updateInfo() {
+    try {
+      const info = await fetchGameInfo();
+      document.getElementById("join-address").textContent = info.address;
+      document.getElementById("players-count").textContent =
+        "Игроков: " + info.playerCount + " из " + MAX_PLAYERS;
+    } catch (error) {
+      document.getElementById("join-address").textContent = "нет связи с сервером";
+    }
+  }
+
+  renderEmptySlots();
+  updateInfo();
+  setInterval(updateInfo, 1000);
+</script>
+</body>
+</html>
