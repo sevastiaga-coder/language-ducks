@@ -9,7 +9,7 @@
 </head>
 <body>
 <div class="screen">
-  <h1 class="game-title">LANGUAGE DUCKS</h1>
+  <h1 class="game-title" id="game-title">LANGUAGE DUCKS</h1>
 
   <div class="join-panel">
     <div class="join-address" id="join-address">...</div>
@@ -38,8 +38,12 @@
       <div class="word-language" id="reveal-language"></div>
       <div class="reveal-correct">Правильный перевод: <span id="reveal-correct-answer"></span></div>
     </div>
-    <div class="reveal-cards" id="reveal-cards"></div>
-    <div class="scoreboard" id="scoreboard"></div>
+    <div class="reveal-body">
+      <div class="reveal-cards" id="reveal-cards"></div>
+      <div class="reveal-side">
+        <div class="scoreboard" id="scoreboard"></div>
+      </div>
+    </div>
     <div class="next-word-note">Следующее слово через несколько секунд</div>
   </div>
 
@@ -94,6 +98,12 @@
       const playingPanel = document.getElementById("playing-panel");
       const revealPanel = document.getElementById("reveal-panel");
       const finalPanel = document.getElementById("final-panel");
+
+      // Логотип во весь рост нужен только пока собираем игроков (Л1) —
+      // на игровых экранах он мельче и без свечения, чтобы не спорить
+      // за внимание с главным содержимым.
+      const gameTitle = document.getElementById("game-title");
+      gameTitle.classList.toggle("small", info.phase === "playing" || info.phase === "final");
 
       if (info.phase === "final") {
         joinPanel.hidden = true;
@@ -181,6 +191,9 @@
 
     const cardsContainer = document.getElementById("reveal-cards");
     cardsContainer.innerHTML = "";
+    // При пяти игроках и больше карточки не помещаются в один
+    // столбец на экране ноутбука — раскладываем в два.
+    cardsContainer.classList.toggle("two-col", info.results.length > 4);
     info.results.forEach((result, index) => {
       const card = document.createElement("div");
       card.className = "answer-card" + (!result.answered ? " missing" : result.correct ? " correct" : "");

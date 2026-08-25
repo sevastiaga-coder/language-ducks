@@ -50,7 +50,7 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 24px;
 }
@@ -75,6 +75,13 @@ body {
   letter-spacing: .04em;
   text-align: center;
   margin: 0;
+}
+
+/* На игровых экранах (Л2-Л7) логотип — просто маленькая подпись,
+   без свечения, чтобы не отвлекать от главного содержимого. */
+.game-title.small {
+  font-size: 22px;
+  text-shadow: none;
 }
 
 .join-panel {
@@ -237,6 +244,12 @@ body {
   font-size: 18px;
 }
 
+/* Только счётчик на экране ноутбука (Л2) — читают с двух метров,
+   поэтому крупнее общего правила для этого класса на телефоне. */
+#answered-count {
+  font-size: 26px;
+}
+
 .all-answered-note {
   font-family: var(--font-head);
   font-weight: 800;
@@ -288,11 +301,37 @@ body {
   font-weight: 800;
 }
 
-.reveal-cards {
+.reveal-body {
   width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.reveal-cards {
+  flex: 2;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* От пяти игроков и больше карточки не помещаются в один столбец —
+   раскладываем в два, сверху вниз, слева направо. */
+.reveal-cards.two-col {
+  display: block;
+  column-count: 2;
+  column-gap: 20px;
+}
+
+.reveal-cards.two-col .answer-card {
+  break-inside: avoid;
+  margin-bottom: 12px;
+}
+
+.reveal-side {
+  flex: 1;
+  min-width: 220px;
 }
 
 .answer-card {
@@ -322,7 +361,7 @@ body {
 .answer-card-text {
   font-family: var(--font-head);
   font-weight: 800;
-  font-size: 24px;
+  font-size: 34px;
   color: var(--text);
 }
 
@@ -336,7 +375,7 @@ body {
 .answer-card-verdict {
   font-family: var(--font-head);
   font-weight: 800;
-  font-size: 16px;
+  font-size: 20px;
   letter-spacing: .06em;
   color: var(--accent);
 }
@@ -344,7 +383,7 @@ body {
 .answer-card-points {
   font-family: var(--font-head);
   font-weight: 800;
-  font-size: 22px;
+  font-size: 30px;
   color: var(--accent);
 }
 
@@ -385,7 +424,7 @@ body {
   border-radius: var(--radius-s);
   font-family: var(--font-head);
   font-weight: 800;
-  font-size: 18px;
+  font-size: 24px;
   color: var(--text);
 }
 
@@ -457,14 +496,14 @@ body {
   border: var(--card-edge);
   font-family: var(--font-head);
   font-weight: 800;
-  font-size: 18px;
+  font-size: 24px;
   color: var(--text);
   opacity: 0;
   animation: cardAppear .5s ease forwards;
 }
 
 .standings-row.top3 {
-  font-size: 24px;
+  font-size: 28px;
   padding: 14px 20px;
 }
 
@@ -611,7 +650,7 @@ body {
   box-shadow: none;
 }
 
-.join-hint {
+.field-hint {
   min-height: 24px;
   font-size: 16px;
   color: var(--main);
@@ -641,6 +680,17 @@ body {
 .waiting-text {
   font-size: 22px;
   color: var(--main);
+}
+
+.waiting-headline {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--main);
+}
+
+.waiting-substatus {
+  font-size: 18px;
+  color: var(--text-dim);
 }
 
 .host-controls {
@@ -722,4 +772,10 @@ body {
   font-weight: 800;
   font-size: 20px;
   color: var(--main);
+}
+
+/* Средняя из трёх голубых строк результата раунда — приглушаем,
+   чтобы «Ты угадал!» / «Твои очки» / «Ты на N месте» не сливались. */
+#my-score-line {
+  color: var(--text-dim);
 }
