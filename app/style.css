@@ -1049,14 +1049,20 @@ body {
   gap: 12px;
 }
 
+/* Вариант голосования должен явно читаться как кнопка, поэтому фон
+   заметно светлее обычной карточки --card (голубая подсветка поверх
+   неё, тот же приём, что и у .scoreboard-row.leader) и рамка — сплошной
+   голубой --main, как у других нажимаемых элементов (кружок номера,
+   основная кнопка), а не тусклая --card-edge. */
 .vote-btn {
   min-height: 64px;
   width: 100%;
   display: flex;
   align-items: center;
   gap: 14px;
-  background: var(--card);
-  border: var(--card-edge);
+  background-color: var(--card);
+  background-image: linear-gradient(rgba(53,216,255,.22), rgba(53,216,255,.22));
+  border: 2px solid var(--main);
   border-radius: var(--radius-s);
   padding: 10px 18px;
   font-family: var(--font-body);
@@ -1103,9 +1109,12 @@ body {
 }
 
 /* Свой собственный вариант виден, но приглушён и не нажимается —
-   за себя голосовать нельзя (решение босса). */
+   за себя голосовать нельзя (решение босса). Стиль как у неактивной
+   кнопки из style.md: прозрачный фон, тусклая рамка и текст. */
 .vote-btn:disabled.mine {
-  opacity: .5;
+  background-color: transparent;
+  background-image: none;
+  border: 2px solid var(--text-dim);
   color: var(--text-dim);
 }
 
