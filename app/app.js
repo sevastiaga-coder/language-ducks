@@ -48,6 +48,16 @@ async function sendFib(playerId, fib) {
   return response.json();
 }
 
+// Игрок голосует за один из вариантов на голосовании «Обманки».
+async function sendVote(playerId, index) {
+  const response = await fetch("/api/vote", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: playerId, index: index }),
+  });
+  return response.json();
+}
+
 // Ведущий нажал «Сыграть ещё раз» в финале.
 async function restartGame(playerId) {
   const response = await fetch("/api/restart", {

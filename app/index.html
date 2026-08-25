@@ -46,6 +46,19 @@
     <div class="answered-count" id="phone-answered-count"></div>
   </div>
 
+  <div id="vote-view" class="answer-view" hidden>
+    <div class="waiting-name">Ты играешь как <span id="vote-player-name"></span></div>
+    <div class="task-line">Где настоящий перевод: <span id="vote-task-word" class="task-word"></span></div>
+    <div class="task-language" id="vote-task-language"></div>
+    <div class="vote-options-list" id="vote-options-list"></div>
+  </div>
+
+  <div id="vote-submitted-view" class="waiting-view" hidden>
+    <div class="waiting-name">Ты играешь как <span id="vote-submitted-player-name"></span></div>
+    <div class="submitted-check">✓</div>
+    <div class="waiting-text">Голос принят, жди остальных</div>
+  </div>
+
   <div id="submitted-view" class="waiting-view" hidden>
     <div class="waiting-name">Ты играешь как <span id="submitted-player-name"></span></div>
     <div class="submitted-check" id="submitted-check">✓</div>
@@ -82,6 +95,8 @@
   const closedView = document.getElementById("closed-view");
   const waitingView = document.getElementById("waiting-view");
   const answerView = document.getElementById("answer-view");
+  const voteView = document.getElementById("vote-view");
+  const voteSubmittedView = document.getElementById("vote-submitted-view");
   const submittedView = document.getElementById("submitted-view");
   const finalView = document.getElementById("final-view");
   const playerNameLabel = document.getElementById("player-name-label");
@@ -101,6 +116,12 @@
   const answerBtn = document.getElementById("answer-btn");
   const answerHint = document.getElementById("answer-hint");
   const phoneAnsweredCount = document.getElementById("phone-answered-count");
+
+  const votePlayerName = document.getElementById("vote-player-name");
+  const voteTaskWord = document.getElementById("vote-task-word");
+  const voteTaskLanguage = document.getElementById("vote-task-language");
+  const voteOptionsList = document.getElementById("vote-options-list");
+  const voteSubmittedPlayerName = document.getElementById("vote-submitted-player-name");
 
   const submittedPlayerName = document.getElementById("submitted-player-name");
   const submittedCheck = document.getElementById("submitted-check");
@@ -132,6 +153,9 @@
   // Какой этап сейчас идёт ("translate" или "trick") — от этого
   // зависят подписи на экране ввода ответа (Т3).
   let currentStage = null;
+  // Список вариантов голосования не пересоздаём на каждый опрос — только
+  // когда слово реально сменилось, иначе кнопки мигали бы каждую секунду.
+  let lastVoteListKey = null;
 
   function hideAllViews() {
     // Логотип показываем только на экране входа (Т1) — на остальных
@@ -141,6 +165,8 @@
     closedView.hidden = true;
     waitingView.hidden = true;
     answerView.hidden = true;
+    voteView.hidden = true;
+    voteSubmittedView.hidden = true;
     submittedView.hidden = true;
     finalView.hidden = true;
   }
@@ -263,6 +289,44 @@
     myRankLine.textContent = "Ты на " + info.myRank + " месте";
   }
 
+  function renderVoteView(info) {
+    hideAllViews();
+    voteView.hidden = false;
+    voteTaskWord.textContent = info.word || "";
+    voteTaskWord.classList.toggle("cyr", isCyrillic(info.word));
+    voteTaskLanguage.textContent = info.wordLanguage ? "язык: " + info.wordLanguage : "";
+
+    const listKey = info.wordIndex + "|" + info.voteOptions.join("|") + "|" + info.myVoteOptionIndex;
+    if (listKey !== lastVoteListKey) {
+      lastVoteListKey = listKey;
+      voteOptionsList.innerHTML = "";
+      info.voteOptions.forEach((text, index) => {
+        const isMine = index === info.myVoteOptionIndex;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "vote-btn" + (isMine ? " mine" : "");
+        btn.disabled = isMine;
+
+        const number = document.createElement("span");
+        number.className = "vote-btn-number";
+        number.textContent = index + 1;
+
+        const label = document.createElement("span");
+        label.textContent = text;
+
+        btn.appendChild(number);
+        btn.appendChild(label);
+        btn.addEventListener("click", () => castVote(index));
+        voteOptionsList.appendChild(btn);
+      });
+    }
+  }
+
+  function renderVoteSubmittedView(info) {
+    hideAllViews();
+    voteSubmittedView.hidden = false;
+  }
+
   function renderFinalView(info) {
     hideAllViews();
     finalView.hidden = false;
@@ -285,7 +349,13 @@
       return;
     }
     if (info.phase === "playing") {
-      if (info.myAnswered || info.revealed) {
+      if (info.stage === "trick" && info.trickStage === "voting") {
+        if (info.myVoted) {
+          renderVoteSubmittedView(info);
+        } else {
+          renderVoteView(info);
+        }
+      } else if (info.myAnswered || info.revealed) {
         renderSubmittedView(info);
       } else {
         renderAnswerView(info);
@@ -312,6 +382,8 @@
   function enterGame(name) {
     playerNameLabel.textContent = name;
     answerPlayerName.textContent = name;
+    votePlayerName.textContent = name;
+    voteSubmittedPlayerName.textContent = name;
     submittedPlayerName.textContent = name;
     finalPlayerName.textContent = name;
     startPolling();
@@ -391,6 +463,16 @@
       submitAnswer();
     }
   });
+
+  async function castVote(index) {
+    const result = await sendVote(myPlayerId, index);
+    // Ошибку (например, гонка — сервер уже перешёл дальше) не
+    // показываем отдельно: просто обновляем экран по свежим данным,
+    // и он сам покажет то, что сейчас правда происходит.
+    void result;
+    const info = await fetchGameInfo(myPlayerId);
+    renderPhase(info);
+  }
 
   restartBtn.addEventListener("click", async () => {
     restartBtn.disabled = true;

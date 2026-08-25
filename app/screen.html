@@ -42,6 +42,17 @@
     <div class="all-answered-note" id="fib-all-answered-note" hidden>Все придумали!</div>
   </div>
 
+  <div class="playing-panel" id="vote-panel" hidden>
+    <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
+    <div class="stage-hint">Где настоящий перевод?</div>
+    <div class="reveal-word" id="vote-word"></div>
+    <div class="word-language" id="vote-language"></div>
+    <div class="vote-options" id="vote-options"></div>
+    <div class="answered-list" id="vote-voted-list"></div>
+    <div class="answered-count" id="vote-voted-count"></div>
+    <div class="all-answered-note" id="vote-all-voted-note" hidden>Все проголосовали!</div>
+  </div>
+
   <div class="reveal-panel" id="reveal-panel" hidden>
     <div class="reveal-header">
       <div class="reveal-word" id="reveal-word"></div>
@@ -75,6 +86,8 @@
   let lastPlayersKey = null;
   let lastAnsweredKey = null;
   let lastFibKey = null;
+  let lastVoteKey = null;
+  let lastVoteVotedKey = null;
   let lastRevealKey = null;
   let lastFinalKey = null;
 
@@ -108,6 +121,7 @@
       const playersPanel = document.getElementById("players-panel");
       const playingPanel = document.getElementById("playing-panel");
       const fibPanel = document.getElementById("fib-panel");
+      const votePanel = document.getElementById("vote-panel");
       const revealPanel = document.getElementById("reveal-panel");
       const finalPanel = document.getElementById("final-panel");
 
@@ -122,6 +136,7 @@
         playersPanel.hidden = true;
         playingPanel.hidden = true;
         fibPanel.hidden = true;
+        votePanel.hidden = true;
         revealPanel.hidden = true;
         finalPanel.hidden = false;
         renderFinal(info);
@@ -133,9 +148,22 @@
         playersPanel.hidden = true;
         playingPanel.hidden = true;
         fibPanel.hidden = true;
+        votePanel.hidden = true;
         revealPanel.hidden = false;
         finalPanel.hidden = true;
         renderReveal(info);
+        return;
+      }
+
+      if (info.phase === "playing" && info.stage === "trick" && info.trickStage === "voting") {
+        joinPanel.hidden = true;
+        playersPanel.hidden = true;
+        playingPanel.hidden = true;
+        fibPanel.hidden = true;
+        votePanel.hidden = false;
+        revealPanel.hidden = true;
+        finalPanel.hidden = true;
+        renderVote(info);
         return;
       }
 
@@ -144,6 +172,7 @@
         playersPanel.hidden = true;
         playingPanel.hidden = true;
         fibPanel.hidden = false;
+        votePanel.hidden = true;
         revealPanel.hidden = true;
         finalPanel.hidden = true;
         renderFib(info);
@@ -155,6 +184,7 @@
         playersPanel.hidden = true;
         playingPanel.hidden = false;
         fibPanel.hidden = true;
+        votePanel.hidden = true;
         revealPanel.hidden = true;
         finalPanel.hidden = true;
         renderWord(info);
@@ -165,6 +195,7 @@
       playersPanel.hidden = false;
       playingPanel.hidden = true;
       fibPanel.hidden = true;
+      votePanel.hidden = true;
       revealPanel.hidden = true;
       finalPanel.hidden = true;
       document.getElementById("join-address").textContent = info.address;
@@ -235,6 +266,56 @@
     document.getElementById("fib-answered-count").textContent =
       "Придумали " + info.answeredCount + " из " + info.players.length;
     document.getElementById("fib-all-answered-note").hidden = !info.allAnswered;
+  }
+
+  function renderVote(info) {
+    const wordEl = document.getElementById("vote-word");
+    wordEl.textContent = info.word || "";
+    wordEl.classList.toggle("cyr", isCyrillic(info.word));
+    document.getElementById("vote-language").textContent = info.wordLanguage || "";
+
+    // Список вариантов не пересоздаём каждую секунду опроса — только
+    // когда слово реально сменилось. Авторов вариантов сервер сюда не
+    // присылает вовсе, поэтому карточки все одинаковые на вид.
+    const optionsKey = info.wordIndex + "|" + info.voteOptions.join("|");
+    if (optionsKey !== lastVoteKey) {
+      lastVoteKey = optionsKey;
+      const optionsContainer = document.getElementById("vote-options");
+      optionsContainer.innerHTML = "";
+      info.voteOptions.forEach((text, index) => {
+        const option = document.createElement("div");
+        option.className = "vote-option";
+        option.style.animationDelay = (index * 150) + "ms";
+        const number = document.createElement("div");
+        number.className = "vote-option-number";
+        number.textContent = index + 1;
+        const label = document.createElement("div");
+        label.className = "vote-option-text";
+        label.textContent = text;
+        option.appendChild(number);
+        option.appendChild(label);
+        optionsContainer.appendChild(option);
+      });
+    }
+
+    const votedKey = info.wordIndex + "|" + info.players.join(",") + "|" +
+      info.votedNames.slice().sort().join(",");
+    if (votedKey !== lastVoteVotedKey) {
+      lastVoteVotedKey = votedKey;
+      const votedList = document.getElementById("vote-voted-list");
+      votedList.innerHTML = "";
+      info.players.forEach((name) => {
+        const item = document.createElement("div");
+        const voted = info.votedNames.includes(name);
+        item.className = "answered-name" + (voted ? " answered" : "");
+        item.textContent = (voted ? "✓ " : "") + name;
+        votedList.appendChild(item);
+      });
+    }
+
+    document.getElementById("vote-voted-count").textContent =
+      "Проголосовали " + info.votedCount + " из " + info.players.length;
+    document.getElementById("vote-all-voted-note").hidden = !info.allVoted;
   }
 
   function renderReveal(info) {
