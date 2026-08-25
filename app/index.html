@@ -47,9 +47,16 @@
   <div id="submitted-view" class="waiting-view" hidden>
     <div class="waiting-name">Ты играешь как <span id="submitted-player-name"></span></div>
     <div class="submitted-check" id="submitted-check">✓</div>
+    <div class="points-earned" id="points-earned" hidden></div>
     <div class="waiting-text" id="submitted-status">Ответ принят, жди остальных</div>
     <div class="submitted-answer" id="submitted-answer-text"></div>
     <div class="answered-count" id="submitted-answered-count"></div>
+    <div class="my-score-line" id="my-score-line" hidden></div>
+    <div class="my-score-line" id="my-rank-line" hidden></div>
+  </div>
+
+  <div id="final-view" class="waiting-view" hidden>
+    <div class="waiting-text">Игра окончена, смотри на большой экран</div>
   </div>
 </div>
 
@@ -63,6 +70,7 @@
   const waitingView = document.getElementById("waiting-view");
   const answerView = document.getElementById("answer-view");
   const submittedView = document.getElementById("submitted-view");
+  const finalView = document.getElementById("final-view");
   const playerNameLabel = document.getElementById("player-name-label");
   const waitingStatus = document.getElementById("waiting-status");
   const hostControls = document.getElementById("host-controls");
@@ -80,9 +88,12 @@
 
   const submittedPlayerName = document.getElementById("submitted-player-name");
   const submittedCheck = document.getElementById("submitted-check");
+  const pointsEarned = document.getElementById("points-earned");
   const submittedStatus = document.getElementById("submitted-status");
   const submittedAnswerText = document.getElementById("submitted-answer-text");
   const submittedAnsweredCount = document.getElementById("submitted-answered-count");
+  const myScoreLine = document.getElementById("my-score-line");
+  const myRankLine = document.getElementById("my-rank-line");
 
   let myPlayerId = null;
   let pollTimer = null;
@@ -97,6 +108,7 @@
     waitingView.hidden = true;
     answerView.hidden = true;
     submittedView.hidden = true;
+    finalView.hidden = true;
   }
 
   function showJoinForm() {
@@ -146,27 +158,44 @@
     submittedAnsweredCount.textContent = "Ответили " + info.answeredCount + " из " + info.playerCount;
 
     if (!info.revealed) {
+      submittedCheck.hidden = false;
       submittedCheck.textContent = "✓";
       submittedCheck.classList.remove("wrong");
       submittedStatus.textContent = "Ответ принят, жди остальных";
-    } else if (!info.myAnswered) {
-      submittedCheck.textContent = "✗";
-      submittedCheck.classList.add("wrong");
+      pointsEarned.hidden = true;
+      myScoreLine.hidden = true;
+      myRankLine.hidden = true;
+      return;
+    }
+
+    // Слово раскрыто — главное теперь начисление очков, а не галочка.
+    submittedCheck.hidden = true;
+    pointsEarned.hidden = false;
+    pointsEarned.textContent = "+" + info.myPoints;
+    pointsEarned.classList.toggle("zero", info.myPoints === 0);
+
+    if (!info.myAnswered) {
       submittedStatus.textContent = "Ты не успел ответить";
     } else if (info.myCorrect) {
-      submittedCheck.textContent = "✓";
-      submittedCheck.classList.remove("wrong");
       submittedStatus.textContent = "Ты угадал!";
     } else {
-      submittedCheck.textContent = "✗";
-      submittedCheck.classList.add("wrong");
       submittedStatus.textContent = "Мимо";
     }
+
+    myScoreLine.hidden = false;
+    myScoreLine.textContent = "Твои очки: " + info.myScore;
+    myRankLine.hidden = false;
+    myRankLine.textContent = "Ты на " + info.myRank + " месте";
   }
 
   // Решает, какой экран телефона показать прямо сейчас, по свежим
   // данным с сервера.
   function renderPhase(info) {
+    if (info.phase === "final") {
+      hideAllViews();
+      finalView.hidden = false;
+      return;
+    }
     if (info.phase === "playing") {
       if (info.myAnswered || info.revealed) {
         renderSubmittedView(info);

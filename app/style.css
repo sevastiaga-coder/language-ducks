@@ -323,12 +323,30 @@ body {
   color: var(--text);
 }
 
+.answer-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
 .answer-card-verdict {
   font-family: var(--font-head);
   font-weight: 800;
   font-size: 16px;
   letter-spacing: .06em;
   color: var(--accent);
+}
+
+.answer-card-points {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--accent);
+}
+
+.answer-card-points.zero {
+  color: var(--text-dim);
 }
 
 .answer-card.correct {
@@ -347,6 +365,64 @@ body {
 
 .answer-card.missing .answer-card-verdict {
   color: var(--text-dim);
+}
+
+.scoreboard {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scoreboard-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: var(--radius-s);
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.scoreboard-row.leader {
+  background: rgba(53,216,255,.15);
+  border: var(--card-edge);
+}
+
+.scoreboard-score {
+  color: var(--main);
+}
+
+.next-word-note {
+  font-size: 16px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.final-panel {
+  width: 100%;
+  background: var(--panel);
+  border: var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--glow-panel);
+  padding: 56px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.final-title {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(40px, 6vw, 64px);
+  color: var(--accent);
+  -webkit-text-stroke: 2px var(--main);
+  paint-order: stroke fill;
+  text-shadow: var(--glow-word);
+  letter-spacing: .04em;
+  text-align: center;
 }
 
 @keyframes cardAppear {
@@ -541,9 +617,32 @@ body {
   text-shadow: none;
 }
 
+.points-earned {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(48px, 16vw, 88px);
+  color: var(--accent);
+  -webkit-text-stroke: 2px var(--main);
+  paint-order: stroke fill;
+  text-shadow: var(--glow-word);
+}
+
+.points-earned.zero {
+  color: var(--text-dim);
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
+
 .submitted-answer {
   font-family: var(--font-head);
   font-weight: 700;
   font-size: 22px;
   color: var(--text);
+}
+
+.my-score-line {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--main);
 }

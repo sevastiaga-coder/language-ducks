@@ -39,6 +39,12 @@
       <div class="reveal-correct">Правильный перевод: <span id="reveal-correct-answer"></span></div>
     </div>
     <div class="reveal-cards" id="reveal-cards"></div>
+    <div class="scoreboard" id="scoreboard"></div>
+    <div class="next-word-note">Следующее слово через несколько секунд</div>
+  </div>
+
+  <div class="final-panel" id="final-panel" hidden>
+    <div class="final-title">ИГРА ОКОНЧЕНА</div>
   </div>
 </div>
 
@@ -82,12 +88,23 @@
       const playersPanel = document.getElementById("players-panel");
       const playingPanel = document.getElementById("playing-panel");
       const revealPanel = document.getElementById("reveal-panel");
+      const finalPanel = document.getElementById("final-panel");
+
+      if (info.phase === "final") {
+        joinPanel.hidden = true;
+        playersPanel.hidden = true;
+        playingPanel.hidden = true;
+        revealPanel.hidden = true;
+        finalPanel.hidden = false;
+        return;
+      }
 
       if (info.phase === "playing" && info.revealed) {
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
         revealPanel.hidden = false;
+        finalPanel.hidden = true;
         renderReveal(info);
         return;
       }
@@ -97,6 +114,7 @@
         playersPanel.hidden = true;
         playingPanel.hidden = false;
         revealPanel.hidden = true;
+        finalPanel.hidden = true;
         renderWord(info);
         return;
       }
@@ -105,6 +123,7 @@
       playersPanel.hidden = false;
       playingPanel.hidden = true;
       revealPanel.hidden = true;
+      finalPanel.hidden = true;
       document.getElementById("join-address").textContent = info.address;
       document.getElementById("players-count").textContent =
         "Игроков: " + info.playerCount + " из " + MAX_PLAYERS;
@@ -145,10 +164,10 @@
     document.getElementById("reveal-language").textContent = info.wordLanguage || "";
     document.getElementById("reveal-correct-answer").textContent = info.correctAnswer || "";
 
-    // Пересоздаём карточки только когда слово или сами ответы реально
-    // изменились — иначе анимация появления перезапускалась бы каждую
-    // секунду опроса сервера, и карточки мигали.
-    const revealKey = info.word + "|" + JSON.stringify(info.results);
+    // Пересоздаём карточки и таблицу очков только когда слово или сами
+    // ответы реально изменились — иначе анимация появления
+    // перезапускалась бы каждую секунду опроса сервера, и карточки мигали.
+    const revealKey = info.word + "|" + JSON.stringify(info.results) + "|" + JSON.stringify(info.scoreboard);
     if (revealKey === lastRevealKey) {
       return;
     }
@@ -172,6 +191,9 @@
       info_block.appendChild(nameEl);
       info_block.appendChild(textEl);
 
+      const right = document.createElement("div");
+      right.className = "answer-card-right";
+
       const verdict = document.createElement("div");
       verdict.className = "answer-card-verdict";
       if (!result.answered) {
@@ -180,9 +202,32 @@
         verdict.textContent = "ВЕРНО";
       }
 
+      const points = document.createElement("div");
+      points.className = "answer-card-points" + (result.points > 0 ? "" : " zero");
+      points.textContent = "+" + result.points;
+
+      right.appendChild(verdict);
+      right.appendChild(points);
+
       card.appendChild(info_block);
-      card.appendChild(verdict);
+      card.appendChild(right);
       cardsContainer.appendChild(card);
+    });
+
+    const scoreboardContainer = document.getElementById("scoreboard");
+    scoreboardContainer.innerHTML = "";
+    const topScore = info.scoreboard.length ? info.scoreboard[0].score : -1;
+    info.scoreboard.forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "scoreboard-row" + (entry.score === topScore ? " leader" : "");
+      const nameEl = document.createElement("div");
+      nameEl.textContent = entry.name;
+      const scoreEl = document.createElement("div");
+      scoreEl.className = "scoreboard-score";
+      scoreEl.textContent = entry.score;
+      row.appendChild(nameEl);
+      row.appendChild(scoreEl);
+      scoreboardContainer.appendChild(row);
     });
   }
 

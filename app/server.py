@@ -16,6 +16,7 @@ Language Ducks — маленький сервер для игры.
 import json
 import random
 import socket
+import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,6 +34,11 @@ WORDS_PER_ROUND = 5
 # Сколько секунд ждём после последнего ответа, прежде чем показать
 # результаты — чтобы последний игрок успел убрать палец от экрана.
 REVEAL_DELAY_SECONDS = 2.0
+# Сколько секунд держим показ ответов, прежде чем перейти к следующему
+# слову — чтобы за столом успели посмотреть и обсудить.
+NEXT_WORD_DELAY_SECONDS = 6.0
+# Сколько очков даёт правильный ответ. Неверный или пропущенный — 0.
+POINTS_CORRECT = 100
 
 # Состояние игры целиком живёт здесь, в памяти сервера.
 # Дальше, в следующих частях, сюда добавятся вопросы, очки и т.д.
@@ -52,6 +58,9 @@ REVEAL_DELAY_SECONDS = 2.0
 # all_answered_time — момент (time.time()), когда ответили все игроки.
 # None, пока кто-то ещё не ответил. Нужен, чтобы показать результаты
 # не сразу, а через REVEAL_DELAY_SECONDS — дать время убрать палец.
+# scored_this_word — очки за текущее слово уже начислены игрокам (True)
+# или ещё нет (False). Не даёт начислить очки дважды за одно слово,
+# пока сервер ждёт NEXT_WORD_DELAY_SECONDS перед следующим словом.
 game_state = {
     "players": [],
     "phase": "lobby",
@@ -60,7 +69,13 @@ game_state = {
     "word_index": 0,
     "answers": {},
     "all_answered_time": None,
+    "scored_this_word": False,
 }
+
+# Защищает переход к следующему слову от гонки: экран и несколько
+# телефонов опрашивают сервер каждую секунду, и без замка два запроса
+# могли бы одновременно решить, что пора начислять очки или листать слово.
+state_lock = threading.Lock()
 
 
 def normalize_answer(text):
@@ -135,7 +150,7 @@ def handle_join(payload):
         if player["name"].lower() == name.lower():
             return {"ok": False, "error": "Такое имя уже занято, выбери другое"}
 
-    new_player = {"id": uuid.uuid4().hex, "name": name}
+    new_player = {"id": uuid.uuid4().hex, "name": name, "score": 0}
     game_state["players"].append(new_player)
     return {"ok": True, "id": new_player["id"], "name": new_player["name"]}
 
@@ -163,6 +178,7 @@ def handle_start(payload):
     game_state["word_index"] = 0
     game_state["answers"] = {}
     game_state["all_answered_time"] = None
+    game_state["scored_this_word"] = False
     return {"ok": True}
 
 
@@ -197,6 +213,44 @@ def handle_answer(payload):
             game_state["all_answered_time"] = time.time()
 
     return {"ok": True}
+
+
+def advance_game():
+    """Двигает игру вперёд по времени: начисляет очки за раскрытое слово
+    и, спустя NEXT_WORD_DELAY_SECONDS после раскрытия, переходит к
+    следующему слову или (после последнего) — к финалу.
+
+    Вызывается перед каждым ответом на /api/info. Экраны сами ничего
+    не решают — только показывают то, что отдаёт сервер, иначе ноутбук
+    и телефоны могли бы разойтись во времени.
+    """
+    with state_lock:
+        if game_state["phase"] != "playing" or not game_state["words"]:
+            return
+        if game_state["all_answered_time"] is None:
+            return
+
+        reveal_time = game_state["all_answered_time"] + REVEAL_DELAY_SECONDS
+        now = time.time()
+        if now < reveal_time:
+            return
+
+        if not game_state["scored_this_word"]:
+            current_word = game_state["words"][game_state["word_index"]]
+            for player in game_state["players"]:
+                player_answer = game_state["answers"].get(player["id"])
+                if is_answer_correct(current_word, player_answer):
+                    player["score"] += POINTS_CORRECT
+            game_state["scored_this_word"] = True
+
+        if now - reveal_time >= NEXT_WORD_DELAY_SECONDS:
+            if game_state["word_index"] + 1 < len(game_state["words"]):
+                game_state["word_index"] += 1
+                game_state["answers"] = {}
+                game_state["all_answered_time"] = None
+                game_state["scored_this_word"] = False
+            else:
+                game_state["phase"] = "final"
 
 
 def get_local_ip():
@@ -261,6 +315,8 @@ class GameRequestHandler(BaseHTTPRequestHandler):
         path = parsed_url.path
 
         if path == "/api/info":
+            advance_game()
+
             query = parse_qs(parsed_url.query)
             player_id = (query.get("id") or [None])[0]
             is_host = bool(
@@ -291,14 +347,36 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             if revealed:
                 for player in game_state["players"]:
                     player_answer = game_state["answers"].get(player["id"])
+                    correct = is_answer_correct(current_word, player_answer)
                     results.append({
                         "name": player["name"],
                         "answered": player["id"] in game_state["answers"],
                         "answer": player_answer,
-                        "correct": is_answer_correct(current_word, player_answer),
+                        "correct": correct,
+                        "points": POINTS_CORRECT if correct else 0,
                     })
                 if player_id:
                     my_correct = is_answer_correct(current_word, game_state["answers"].get(player_id))
+
+            # Таблица очков — от лидера к последнему. При равном счёте
+            # порядок как в списке игроков (кто зашёл раньше).
+            sorted_players = sorted(game_state["players"], key=lambda p: -p["score"])
+            scoreboard = [
+                {"name": player["name"], "score": player["score"]}
+                for player in sorted_players
+            ]
+
+            my_score = None
+            my_rank = None
+            for index, player in enumerate(sorted_players):
+                if player["id"] == player_id:
+                    my_score = player["score"]
+                    my_rank = index + 1
+                    break
+
+            my_points = None
+            if revealed and player_id:
+                my_points = POINTS_CORRECT if my_correct else 0
 
             self.send_json({
                 "address": "{}:{}".format(LOCAL_IP, PORT),
@@ -321,6 +399,10 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 "correctAnswer": current_word["answer"] if revealed else None,
                 "results": results,
                 "myCorrect": my_correct,
+                "scoreboard": scoreboard,
+                "myScore": my_score,
+                "myRank": my_rank,
+                "myPoints": my_points,
             })
             return
 
