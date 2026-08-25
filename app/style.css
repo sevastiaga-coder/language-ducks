@@ -518,6 +518,12 @@ body {
   color: var(--text);
 }
 
+.task-language {
+  font-size: 18px;
+  color: var(--main);
+  margin-top: 4px;
+}
+
 .task-word {
   font-family: var(--font-head);
   font-weight: 800;

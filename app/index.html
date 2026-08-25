@@ -38,6 +38,7 @@
     <div class="waiting-name">Ты играешь как <span id="answer-player-name"></span></div>
     <div class="question-number" id="answer-question-number"></div>
     <div class="task-line">Переведи: <span id="task-word" class="task-word"></span></div>
+    <div class="task-language" id="task-language"></div>
     <input id="answer-input" class="name-input" type="text" maxlength="40" autocomplete="off" placeholder="Твой перевод">
     <button id="answer-btn" class="primary-btn" disabled>ОТВЕТИТЬ</button>
     <div class="answered-count" id="phone-answered-count"></div>
@@ -72,6 +73,7 @@
   const answerPlayerName = document.getElementById("answer-player-name");
   const answerQuestionNumber = document.getElementById("answer-question-number");
   const taskWord = document.getElementById("task-word");
+  const taskLanguage = document.getElementById("task-language");
   const answerInput = document.getElementById("answer-input");
   const answerBtn = document.getElementById("answer-btn");
   const phoneAnsweredCount = document.getElementById("phone-answered-count");
@@ -127,6 +129,7 @@
     answerView.hidden = false;
     answerQuestionNumber.textContent = "Слово " + info.wordIndex + " из " + info.wordTotal;
     taskWord.textContent = info.word || "";
+    taskLanguage.textContent = info.wordLanguage ? "язык: " + info.wordLanguage : "";
 
     if (currentWordIndex !== info.wordIndex) {
       currentWordIndex = info.wordIndex;
