@@ -149,10 +149,19 @@
     }
   }
 
+  // Украинские и белорусские слова задания написаны кириллицей, которой
+  // нет в Orbitron — без этой проверки они падали бы в запасной шрифт
+  // и не совпадали бы с Rubik вокруг.
+  function isCyrillic(text) {
+    return /\p{Script=Cyrillic}/u.test(text || "");
+  }
+
   function renderWord(info) {
     document.getElementById("question-number").textContent =
       "Слово " + info.wordIndex + " из " + info.wordTotal;
-    document.getElementById("word-text").textContent = info.word || "";
+    const wordEl = document.getElementById("word-text");
+    wordEl.textContent = info.word || "";
+    wordEl.classList.toggle("cyr", isCyrillic(info.word));
     document.getElementById("word-language").textContent = info.wordLanguage || "";
 
     const answeredKey = info.wordIndex + "|" + info.players.join(",") + "|" +
@@ -176,7 +185,9 @@
   }
 
   function renderReveal(info) {
-    document.getElementById("reveal-word").textContent = info.word || "";
+    const revealWordEl = document.getElementById("reveal-word");
+    revealWordEl.textContent = info.word || "";
+    revealWordEl.classList.toggle("cyr", isCyrillic(info.word));
     document.getElementById("reveal-language").textContent = info.wordLanguage || "";
     document.getElementById("reveal-correct-answer").textContent = info.correctAnswer || "";
 
