@@ -839,6 +839,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             my_vote_correct = False
             my_fooled_count = 0
             my_fooled_by_name = None
+            my_fooled_names = []
             my_guess_points = 0
             my_fooled_points = 0
             trick_correct_answer = None
@@ -871,9 +872,11 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                         my_fooled_by_name = id_to_name.get(fibber_id)
                 if player_id and player_id in game_state["vote_owners"]:
                     my_fib_index = game_state["vote_owners"].index(player_id)
-                    my_fooled_count = sum(
-                        1 for chosen_index in game_state["votes"].values() if chosen_index == my_fib_index
-                    )
+                    my_fooled_names = [
+                        id_to_name[voter_id] for voter_id, chosen_index in game_state["votes"].items()
+                        if chosen_index == my_fib_index and voter_id in id_to_name
+                    ]
+                    my_fooled_count = len(my_fooled_names)
 
                 if player_id:
                     my_guess_points = POINTS_TRICK_GUESS if my_vote_correct else 0
@@ -918,6 +921,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 "myVoteCorrect": my_vote_correct,
                 "myFooledCount": my_fooled_count,
                 "myFooledByName": my_fooled_by_name,
+                "myFooledNames": my_fooled_names,
                 "myGuessPoints": my_guess_points,
                 "myFooledPoints": my_fooled_points,
             })

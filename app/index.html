@@ -65,7 +65,8 @@
     <div class="waiting-text" id="trick-result-status"></div>
     <div class="my-score-line dim" id="trick-guess-line"></div>
     <div class="my-score-line dim" id="trick-fooled-line"></div>
-    <div class="my-score-line" id="trick-score-line"></div>
+    <div class="my-score-line dim" id="trick-score-line"></div>
+    <div class="my-score-line" id="trick-rank-line"></div>
   </div>
 
   <div id="submitted-view" class="waiting-view" hidden>
@@ -139,6 +140,7 @@
   const trickGuessLine = document.getElementById("trick-guess-line");
   const trickFooledLine = document.getElementById("trick-fooled-line");
   const trickScoreLine = document.getElementById("trick-score-line");
+  const trickRankLine = document.getElementById("trick-rank-line");
 
   const submittedPlayerName = document.getElementById("submitted-player-name");
   const submittedCheck = document.getElementById("submitted-check");
@@ -343,7 +345,19 @@
 
         btn.appendChild(number);
         btn.appendChild(label);
-        btn.addEventListener("click", () => castVote(index));
+        btn.addEventListener("click", () => {
+          if (btn.disabled) {
+            return;
+          }
+          // Реакция сразу по нажатию, не дожидаясь ответа сервера —
+          // иначе легко ткнуть второй раз, пока идёт запрос.
+          voteOptionsList.classList.add("voting-locked");
+          voteOptionsList.querySelectorAll(".vote-btn").forEach((otherBtn) => {
+            otherBtn.disabled = true;
+          });
+          btn.classList.add("picked");
+          castVote(index);
+        });
         voteOptionsList.appendChild(btn);
       });
     }
@@ -352,6 +366,25 @@
   function renderVoteSubmittedView(info) {
     hideAllViews();
     voteSubmittedView.hidden = false;
+  }
+
+  // «За обманутых (1): +100» звучит как техническая метка, а не как
+  // рассказ о том, что случилось за столом — заменяем на имена.
+  function formatFooledLine(names, points) {
+    if (!names.length) {
+      return "Твою выдумку не выбрал никто";
+    }
+    let who;
+    if (names.length === 1) {
+      who = names[0] + " клюнул на твою выдумку";
+    } else if (names.length <= 4) {
+      const last = names[names.length - 1];
+      const rest = names.slice(0, -1).join(", ");
+      who = rest + " и " + last + " клюнули на твою выдумку";
+    } else {
+      who = names.length + " человек клюнули на твою выдумку";
+    }
+    return who + " (+" + points + ")";
   }
 
   function renderTrickResultView(info) {
@@ -366,11 +399,10 @@
       : "Мимо! Тебя обманул " + info.myFooledByName;
 
     trickGuessLine.textContent = "За угадывание: +" + info.myGuessPoints;
-    trickFooledLine.textContent = info.myFooledCount > 0
-      ? "За обманутых (" + info.myFooledCount + "): +" + info.myFooledPoints
-      : "Твою выдумку не выбрал никто";
+    trickFooledLine.textContent = formatFooledLine(info.myFooledNames, info.myFooledPoints);
 
     trickScoreLine.textContent = "Твои очки: " + info.myScore;
+    trickRankLine.textContent = "Ты на " + info.myRank + " месте";
   }
 
   function renderFinalView(info) {

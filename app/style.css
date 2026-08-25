@@ -58,10 +58,29 @@ body {
 .screen {
   width: 100%;
   max-width: 1100px;
+  min-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 24px;
+}
+
+/* Итог «Обманки» (Л6) и голосование (Л5) — самые тесные по высоте
+   экраны при 10 игроках: карточек/вариантов много, а строк — три-четыре
+   на каждый. Шире общего экрана — меньше переносов строк, значит
+   ниже карточки. Остальные экраны не трогаем, чтобы не расшатать их. */
+.screen:has(#trick-reveal-panel:not([hidden])),
+.screen:has(#vote-panel:not([hidden])) {
+  max-width: 1380px;
+}
+
+/* За столом смотрят в центр экрана. Экраны без списка (Л4 — придумываем,
+   заставка между этапами) отцентрированы по вертикали автомаршами —
+   экраны со списками остаются прижаты к верху, как раньше. */
+#fib-panel,
+#intermission-panel {
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 .game-title {
@@ -207,6 +226,40 @@ body {
   text-align: center;
 }
 
+/* Шапка экрана голосования (Л5) сжата в две строки вместо четырёх —
+   иначе на 11 вариантах (10 игроков) шапка съедает место, которое
+   нужно списку. Плашка этапа и вопрос — одной строкой... */
+#vote-panel {
+  gap: 8px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+.vote-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* ...слово и язык — тоже одной строкой, а не двумя. */
+.vote-word-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vote-word-row .reveal-word {
+  font-size: 28px;
+}
+
+.vote-word-row .word-language {
+  font-size: 18px;
+}
+
 .word {
   font-family: var(--font-head);
   font-weight: 900;
@@ -261,9 +314,11 @@ body {
   font-size: 18px;
 }
 
-/* Только счётчик на экране ноутбука (Л2) — читают с двух метров,
+/* Счётчики на экране ноутбука (Л2, Л4, Л5) — читают с двух метров,
    поэтому крупнее общего правила для этого класса на телефоне. */
-#answered-count {
+#answered-count,
+#fib-answered-count,
+#vote-voted-count {
   font-size: 26px;
 }
 
@@ -280,7 +335,32 @@ body {
   max-width: 640px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+}
+
+/* От семи вариантов список не помещается в один столбец на экране
+   ноутбука — раскладываем в два, тем же приёмом column-count, что и
+   у reveal-cards. При 10 игроках (11 вариантов) двух ещё мало — уходим
+   в три, чтобы список поместился даже с длинными выдумками. */
+.vote-options.two-col,
+.vote-options.three-col {
+  max-width: 1320px;
+  display: block;
+  column-gap: 16px;
+}
+
+.vote-options.two-col {
+  column-count: 2;
+}
+
+.vote-options.three-col {
+  column-count: 3;
+}
+
+.vote-options.two-col .vote-option,
+.vote-options.three-col .vote-option {
+  break-inside: avoid;
+  margin-bottom: 10px;
 }
 
 .vote-option {
@@ -290,15 +370,18 @@ body {
   background: var(--card);
   border: var(--card-edge);
   border-radius: var(--radius-s);
-  padding: 14px 20px;
+  padding: 10px 20px;
   opacity: 0;
   animation: cardAppear .5s ease forwards;
 }
 
+/* Номер варианта — то, из-за чего за столом спорят («я за пятый»),
+   должен читаться с двух метров, поэтому кружок и цифра крупнее,
+   чем обычная служебная подпись. */
 .vote-option-number {
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 2px solid var(--main);
   color: var(--main);
@@ -307,13 +390,13 @@ body {
   justify-content: center;
   font-family: var(--font-body);
   font-weight: 800;
-  font-size: 18px;
+  font-size: 24px;
 }
 
 .vote-option-text {
   font-family: var(--font-body);
   font-weight: 800;
-  font-size: 28px;
+  font-size: 26px;
   color: var(--text);
 }
 
@@ -360,6 +443,42 @@ body {
   font-weight: 800;
 }
 
+/* Настоящий перевод на итоге «Обманки» (Л6) — ответ на вопрос, ради
+   которого весь этап, поэтому отдельная широкая карточка над сеткой
+   выдумок, крупно, с тем же приёмом подсветки, что и верная карточка
+   «Перевода». */
+.real-card {
+  width: 100%;
+  background: var(--card-ok);
+  border: var(--ok-edge);
+  border-radius: var(--radius-s);
+  box-shadow: var(--glow-ok);
+  padding: 6px 20px;
+  text-align: center;
+}
+
+.real-card-badge {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: .08em;
+  color: var(--accent);
+}
+
+.real-card-text {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 32px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.real-card-voters {
+  font-size: 22px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
 .reveal-body {
   width: 100%;
   display: flex;
@@ -395,6 +514,23 @@ body {
   flex: 3;
 }
 
+/* Карточка выдумки — три строки друг под другом (автор, попавшиеся,
+   текст+очки), а не строка из двух колонок, как у карточки «Перевода». */
+#trick-reveal-cards .answer-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 8px 14px;
+}
+
+/* Панель итога «Обманки» сжата плотнее, чем у «Перевода» — здесь
+   вдобавок отдельная карточка настоящего перевода, и при 10 игроках
+   счёт идёт на каждый лишний пиксель, чтобы уместиться без прокрутки. */
+#trick-reveal-panel {
+  padding: 12px 20px;
+  gap: 8px;
+}
+
 /* «Обманка» при 10 игроках — 11 вариантов, в два столбца ещё не
    помещаются, раскладываем в три. */
 .reveal-cards.three-col {
@@ -413,8 +549,18 @@ body {
    «Перевода») — это целая придуманная фраза, до 40 символов, поэтому
    крупный шрифт карточки ответа здесь мельче, но не ниже общего
    правила «ничего мельче 26px на экране ноутбука». */
+/* До сорока символов (предел ввода на телефоне) текст выдумки может
+   растянуться на 3-4 строки в узкой колонке при 10 игроках — тогда
+   карточка съедает слишком много высоты для стола без полного экрана.
+   Ограничиваем двумя строками с плавным обрезанием и плотным
+   интервалом — читается, но не разваливает карточку. */
 #trick-reveal-cards .answer-card-text {
   font-size: 26px;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .reveal-side {
@@ -456,6 +602,46 @@ body {
   font-weight: 800;
   font-size: 34px;
   color: var(--text);
+}
+
+/* Карточка выдумки на итоге «Обманки» (Л6): автор и список
+   попавшихся — это развязка этапа, поэтому крупнее служебной подписи
+   (.answer-card-name), а начисление стоит в одной строке с текстом
+   выдумки, а не отдельным блоком сбоку. */
+.answer-card-author {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+/* До пяти имён показываем полностью (formatNameList в screen.html),
+   но даже пять имён в узкой колонке — это две строки, поэтому строка
+   плотнее обычного межстрочного интервала, чтобы карточка не росла
+   выше, чем нужно. */
+.answer-card-voters {
+  font-size: 22px;
+  line-height: 1.2;
+  color: var(--text-dim);
+}
+
+.answer-card-row {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.answer-card-row .answer-card-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.answer-card-row .answer-card-points {
+  flex-shrink: 0;
 }
 
 .answer-card-right {
@@ -543,11 +729,11 @@ body {
   border: var(--edge);
   border-radius: var(--radius);
   box-shadow: var(--glow-panel);
-  padding: 40px 28px;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .winner-label {
@@ -569,6 +755,15 @@ body {
   font-weight: 800;
 }
 
+/* При ничьей на первом месте имя — это уже "Аня и Боря и Вася", а не
+   одно слово, и на весь экран (до 110px) оно не помещается. Как
+   только победителей больше одного, шрифт заметно скромнее — имя
+   всё равно остаётся самым крупным элементом экрана, просто без
+   претензии на "во весь рост". */
+.winner-name.multi {
+  font-size: clamp(28px, 5vw, 52px) !important;
+}
+
 .winner-score {
   font-family: var(--font-body);
   font-weight: 800;
@@ -582,15 +777,29 @@ body {
   max-width: 640px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* От восьми игроков таблица не помещается в один столбец на экране
+   ноутбука — раскладываем в два, тем же приёмом, что и у reveal-cards. */
+.final-standings.two-col {
+  max-width: 940px;
+  display: block;
+  column-count: 2;
+  column-gap: 20px;
+}
+
+.final-standings.two-col .standings-row {
+  break-inside: avoid;
+  margin-bottom: 8px;
 }
 
 .standings-row {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 10px 20px;
+  padding: 8px 18px;
   border-radius: var(--radius-s);
   background: var(--card);
   border: var(--card-edge);
@@ -852,13 +1061,30 @@ body {
   padding: 10px 18px;
   font-family: var(--font-body);
   font-weight: 800;
-  font-size: 20px;
+  font-size: 22px;
   color: var(--text);
   text-align: left;
 }
 
 .vote-btn:active {
   transform: translateY(2px);
+}
+
+/* Мгновенная реакция на нажатие (Т4, до ответа сервера): нажатый
+   вариант загорается жёлтой рамкой, остальные гаснут. */
+.vote-btn.picked {
+  border: var(--ok-edge);
+  box-shadow: var(--glow-ok);
+  color: var(--accent);
+}
+
+.vote-btn.picked .vote-btn-number {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.vote-options-list.voting-locked .vote-btn:not(.picked) {
+  opacity: .4;
 }
 
 .vote-btn-number {

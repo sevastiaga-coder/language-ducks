@@ -40,6 +40,7 @@
 
   <div class="playing-panel" id="fib-panel" hidden>
     <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
+    <div class="question-number" id="fib-question-number"></div>
     <div class="stage-hint">Придумай перевод, чтобы все поверили</div>
     <div class="word" id="fib-word"></div>
     <div class="word-language" id="fib-language"></div>
@@ -49,10 +50,14 @@
   </div>
 
   <div class="playing-panel" id="vote-panel" hidden>
-    <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
-    <div class="stage-hint">Где настоящий перевод?</div>
-    <div class="reveal-word" id="vote-word"></div>
-    <div class="word-language" id="vote-language"></div>
+    <div class="vote-header">
+      <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
+      <div class="stage-hint">Где настоящий перевод?</div>
+    </div>
+    <div class="vote-word-row">
+      <span class="reveal-word" id="vote-word"></span>
+      <span class="word-language" id="vote-language"></span>
+    </div>
     <div class="vote-options" id="vote-options"></div>
     <div class="answered-list" id="vote-voted-list"></div>
     <div class="answered-count" id="vote-voted-count"></div>
@@ -78,7 +83,11 @@
     <div class="reveal-header">
       <div class="reveal-word" id="trick-reveal-word"></div>
       <div class="word-language" id="trick-reveal-language"></div>
-      <div class="reveal-correct">Настоящий перевод: <span id="trick-reveal-correct-answer"></span></div>
+    </div>
+    <div class="real-card">
+      <div class="real-card-badge">НАСТОЯЩИЙ ПЕРЕВОД</div>
+      <div class="real-card-text" id="trick-real-text"></div>
+      <div class="real-card-voters" id="trick-real-voters"></div>
     </div>
     <div class="reveal-body">
       <div class="reveal-cards" id="trick-reveal-cards"></div>
@@ -277,6 +286,17 @@
     return /\p{Script=Cyrillic}/u.test(text || "");
   }
 
+  // Список имён (кто нашёл настоящий перевод, кто попался на выдумку)
+  // показываем полностью, пока это разумно, — но если один вариант
+  // обманул почти всех за столом, список из 9 имён разваливает
+  // карточку. Сокращаем, но не раньше пяти имён.
+  function formatNameList(names) {
+    if (names.length <= 5) {
+      return names.join(", ");
+    }
+    return names.slice(0, 5).join(", ") + " и ещё " + (names.length - 5);
+  }
+
   function renderWord(info) {
     document.getElementById("question-number").textContent =
       "Слово " + info.wordIndex + " из " + info.wordTotal;
@@ -306,6 +326,8 @@
   }
 
   function renderFib(info) {
+    document.getElementById("fib-question-number").textContent =
+      "Слово " + info.wordIndex + " из " + info.wordTotal;
     const wordEl = document.getElementById("fib-word");
     wordEl.textContent = info.word || "";
     wordEl.classList.toggle("cyr", isCyrillic(info.word));
@@ -345,6 +367,16 @@
       lastVoteKey = optionsKey;
       const optionsContainer = document.getElementById("vote-options");
       optionsContainer.innerHTML = "";
+      // От семи вариантов список не помещается в один столбец при
+      // 10 игроках — раскладываем в два, как и карточки ответов, а от
+      // десяти (11 вариантов = 10 игроков) — сразу в три, иначе колонка
+      // не помещается даже при длинных выдумках.
+      optionsContainer.classList.remove("two-col", "three-col");
+      if (info.voteOptions.length > 9) {
+        optionsContainer.classList.add("three-col");
+      } else if (info.voteOptions.length > 6) {
+        optionsContainer.classList.add("two-col");
+      }
       info.voteOptions.forEach((text, index) => {
         const option = document.createElement("div");
         option.className = "vote-option";
@@ -469,7 +501,6 @@
     wordEl.textContent = info.word || "";
     wordEl.classList.toggle("cyr", isCyrillic(info.word));
     document.getElementById("trick-reveal-language").textContent = info.wordLanguage || "";
-    document.getElementById("trick-reveal-correct-answer").textContent = info.trickCorrectAnswer || "";
 
     // На последнем слове «Обманки» дальше идёт финал, а не следующее
     // слово — та же честная подпись, что и у «Перевода».
@@ -485,68 +516,62 @@
     }
     lastTrickRevealKey = trickRevealKey;
 
+    // Настоящий перевод — ответ на вопрос, ради которого весь этап,
+    // поэтому он не в общей сетке, а отдельной крупной карточкой сверху.
+    const realResult = info.trickResults.find((result) => result.isReal);
+    const realTextEl = document.getElementById("trick-real-text");
+    realTextEl.textContent = realResult ? realResult.text : "";
+    document.getElementById("trick-real-voters").textContent =
+      realResult && realResult.voterNames.length
+        ? "нашли: " + formatNameList(realResult.voterNames)
+        : "никто не нашёл";
+
+    const fibResults = info.trickResults.filter((result) => !result.isReal);
+
     const cardsContainer = document.getElementById("trick-reveal-cards");
     cardsContainer.innerHTML = "";
-    // Карточки «Обманки» выше карточек «Перевода» (у них ещё строка
-    // про голоса), поэтому при большом числе игроков одного второго
-    // столбца, как у «Перевода», не хватает — переходим сразу на три.
+    // Карточка выдумки — три строки (автор, попавшиеся, текст+очки),
+    // выше карточки «Перевода», поэтому в два/три/четыре столбца
+    // переходим раньше, чтобы 10 игроков (9 выдумок) поместились без
+    // прокрутки даже в обычном окне браузера, а не только на весь экран.
     cardsContainer.classList.remove("two-col", "three-col");
-    if (info.trickResults.length > 7) {
+    if (fibResults.length > 6) {
       cardsContainer.classList.add("three-col");
-    } else if (info.trickResults.length > 4) {
+    } else if (fibResults.length > 3) {
       cardsContainer.classList.add("two-col");
     }
-    info.trickResults.forEach((result, index) => {
+    fibResults.forEach((result, index) => {
       const card = document.createElement("div");
-      card.className = "answer-card" + (result.isReal ? " correct" : "");
+      card.className = "answer-card";
       card.style.animationDelay = (index * 150) + "ms";
 
-      const infoBlock = document.createElement("div");
-      infoBlock.className = "answer-card-info";
+      const author = document.createElement("div");
+      author.className = "answer-card-author";
+      author.textContent = "Придумал: " + result.authorName;
 
-      // Одна строка на автора/голоса — так карточка «Обманки» той же
-      // высоты, что и карточка ответа «Перевода» (имя + ответ), и при
-      // 10 игроках (11 вариантов) помещается в два столбца без прокрутки.
-      const label = document.createElement("div");
-      label.className = "answer-card-name";
-      // При большом числе голосов список имён сокращаем — иначе строка
-      // становится длиннее ширины колонки и разваливается по словам.
-      let votersText = null;
-      if (result.voterNames.length) {
-        const shown = result.voterNames.slice(0, 3).join(", ");
-        const rest = result.voterNames.length - 3;
-        votersText = rest > 0 ? shown + " и ещё " + rest : shown;
-      }
-      if (result.isReal) {
-        label.textContent = "№" + result.number + " · " + (votersText ? "нашли: " + votersText : "никто не нашёл");
-      } else {
-        label.textContent = "№" + result.number + " · придумал: " + result.authorName +
-          " · " + (votersText ? "обманул: " + votersText : "никто не попался");
-      }
+      const voters = document.createElement("div");
+      voters.className = "answer-card-voters";
+      voters.textContent = result.voterNames.length
+        ? "Обманул: " + formatNameList(result.voterNames)
+        : "Никого не обманул";
+
+      const row = document.createElement("div");
+      row.className = "answer-card-row";
 
       const textEl = document.createElement("div");
       textEl.className = "answer-card-text";
       textEl.textContent = result.text;
 
-      infoBlock.appendChild(label);
-      infoBlock.appendChild(textEl);
-
-      const right = document.createElement("div");
-      right.className = "answer-card-right";
-
-      const verdict = document.createElement("div");
-      verdict.className = "answer-card-verdict";
-      verdict.textContent = result.isReal ? "НАСТОЯЩИЙ" : "";
-
       const points = document.createElement("div");
       points.className = "answer-card-points" + (result.points > 0 ? "" : " zero");
       points.textContent = "+" + result.points;
 
-      right.appendChild(verdict);
-      right.appendChild(points);
+      row.appendChild(textEl);
+      row.appendChild(points);
 
-      card.appendChild(infoBlock);
-      card.appendChild(right);
+      card.appendChild(author);
+      card.appendChild(voters);
+      card.appendChild(row);
       cardsContainer.appendChild(card);
     });
 
@@ -581,13 +606,19 @@
 
     document.getElementById("winner-label").textContent =
       winners.length > 1 ? "ПОБЕДИТЕЛИ" : "ПОБЕДИТЕЛЬ";
-    document.getElementById("winner-name").textContent =
-      winners.map((winner) => winner.name).join(" и ");
+    const winnerNameEl = document.getElementById("winner-name");
+    winnerNameEl.textContent = winners.map((winner) => winner.name).join(" и ");
+    // При ничьей имя превращается в "Аня и Боря и Вася" — во весь
+    // экран такое не помещается, шрифт скромнее (см. style.css).
+    winnerNameEl.classList.toggle("multi", winners.length > 1);
     document.getElementById("winner-score").textContent =
       winners.length ? (winners[0].score + " очков") : "";
 
     const container = document.getElementById("final-standings");
     container.innerHTML = "";
+    // От восьми игроков таблица не помещается в один столбец —
+    // раскладываем в два.
+    container.classList.toggle("two-col", standings.length > 7);
     standings.forEach((entry, index) => {
       const row = document.createElement("div");
       const isTop3 = entry.rank <= 3;
