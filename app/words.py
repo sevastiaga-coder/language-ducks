@@ -9,59 +9,62 @@ Language Ducks — слова для этапа «Перевод».
                    верными (например «бабочка» и «мотылёк»)
 
 Проверка ответа игрока с этим списком будет в следующей части —
-здесь только сами слова. По 4 слова на язык. Большинство слов —
-узнаваемые, где можно угадать по созвучию или по школьным знаниям;
-на каждый язык есть одно слово посложнее, но всё равно отгадываемое.
+здесь только сами слова. По 4 слова на язык, и все 20 слов — про
+разные понятия (животные, еда, погода, вещи из дома, части тела,
+время, эмоции), чтобы за партию из 5 слов ничего не повторялось
+по смыслу. Большинство слов — узнаваемые, где можно угадать по
+созвучию или по школьным знаниям; на каждый язык есть слово
+посложнее, но всё равно отгадываемое.
 """
 
 WORDS = [
     # Английский
-    {"word": "cat", "language": "английский", "answer": "кот",
-     "alternatives": ["кошка", "котик"]},
-    {"word": "mirror", "language": "английский", "answer": "зеркало",
+    {"word": "dog", "language": "английский", "answer": "собака",
+     "alternatives": ["пёс", "песик"]},
+    {"word": "apple", "language": "английский", "answer": "яблоко",
      "alternatives": []},
-    {"word": "butterfly", "language": "английский", "answer": "бабочка",
-     "alternatives": ["мотылёк"]},
-    {"word": "shadow", "language": "английский", "answer": "тень",
+    {"word": "rain", "language": "английский", "answer": "дождь",
+     "alternatives": []},
+    {"word": "wind", "language": "английский", "answer": "ветер",
      "alternatives": []},
 
     # Немецкий
-    {"word": "die Katze", "language": "немецкий", "answer": "кошка",
-     "alternatives": ["кот"]},
-    {"word": "der Spiegel", "language": "немецкий", "answer": "зеркало",
+    {"word": "der Fisch", "language": "немецкий", "answer": "рыба",
+     "alternatives": ["рыбка"]},
+    {"word": "die Sonne", "language": "немецкий", "answer": "солнце",
+     "alternatives": ["солнышко"]},
+    {"word": "die Milch", "language": "немецкий", "answer": "молоко",
      "alternatives": []},
-    {"word": "der Apfel", "language": "немецкий", "answer": "яблоко",
+    {"word": "die Hand", "language": "немецкий", "answer": "рука",
      "alternatives": []},
-    {"word": "der Schmetterling", "language": "немецкий", "answer": "бабочка",
-     "alternatives": ["мотылёк"]},
 
     # Испанский
     {"word": "el gato", "language": "испанский", "answer": "кот",
-     "alternatives": ["кошка"]},
-    {"word": "el espejo", "language": "испанский", "answer": "зеркало",
+     "alternatives": ["кошка", "котик"]},
+    {"word": "el pan", "language": "испанский", "answer": "хлеб",
      "alternatives": []},
-    {"word": "el paraguas", "language": "испанский", "answer": "зонт",
-     "alternatives": ["зонтик"]},
-    {"word": "la mariposa", "language": "испанский", "answer": "бабочка",
-     "alternatives": ["мотылёк"]},
+    {"word": "la casa", "language": "испанский", "answer": "дом",
+     "alternatives": ["домик"]},
+    {"word": "los ojos", "language": "испанский", "answer": "глаза",
+     "alternatives": ["глаз"]},
 
     # Украинский
-    {"word": "кіт", "language": "украинский", "answer": "кот",
-     "alternatives": ["кошка"]},
-    {"word": "дзеркало", "language": "украинский", "answer": "зеркало",
-     "alternatives": []},
-    {"word": "метелик", "language": "украинский", "answer": "бабочка",
-     "alternatives": ["мотылёк"]},
-    {"word": "парасолька", "language": "украинский", "answer": "зонтик",
-     "alternatives": ["зонт"]},
+    {"word": "сир", "language": "украинский", "answer": "сыр",
+     "alternatives": ["сырок"]},
+    {"word": "сніг", "language": "украинский", "answer": "снег",
+     "alternatives": ["снежок"]},
+    {"word": "стіл", "language": "украинский", "answer": "стол",
+     "alternatives": ["столик"]},
+    {"word": "вікно", "language": "украинский", "answer": "окно",
+     "alternatives": ["окошко"]},
 
     # Белорусский
-    {"word": "люстэрка", "language": "белорусский", "answer": "зеркало",
-     "alternatives": []},
-    {"word": "матылёк", "language": "белорусский", "answer": "бабочка",
-     "alternatives": ["мотылёк"]},
-    {"word": "агурок", "language": "белорусский", "answer": "огурец",
-     "alternatives": []},
-    {"word": "парасон", "language": "белорусский", "answer": "зонтик",
-     "alternatives": ["зонт"]},
+    {"word": "кніга", "language": "белорусский", "answer": "книга",
+     "alternatives": ["книжка"]},
+    {"word": "птушка", "language": "белорусский", "answer": "птица",
+     "alternatives": ["птичка"]},
+    {"word": "сэрца", "language": "белорусский", "answer": "сердце",
+     "alternatives": ["сердечко"]},
+    {"word": "радасць", "language": "белорусский", "answer": "радость",
+     "alternatives": ["счастье"]},
 ]

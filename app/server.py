@@ -155,6 +155,24 @@ def handle_join(payload):
     return {"ok": True, "id": new_player["id"], "name": new_player["name"]}
 
 
+def pick_round_words():
+    """Выбирает 5 слов на партию: по одному случайному слову с каждого
+    из 5 языков. Так слова в партии точно из разных языков, а заодно
+    не может попасться два слова с одинаковым правильным переводом.
+    """
+    languages = sorted({w["language"] for w in WORDS})
+    chosen = []
+    used_answers = set()
+    for language in languages:
+        candidates = [w for w in WORDS
+                      if w["language"] == language and w["answer"] not in used_answers]
+        word = random.choice(candidates)
+        chosen.append(word)
+        used_answers.add(word["answer"])
+    random.shuffle(chosen)
+    return chosen
+
+
 def handle_start(payload):
     """Обрабатывает нажатие «Начать игру» на телефоне ведущего.
 
@@ -174,7 +192,7 @@ def handle_start(payload):
 
     game_state["phase"] = "playing"
     game_state["stage"] = "translate"
-    game_state["words"] = random.sample(WORDS, WORDS_PER_ROUND)
+    game_state["words"] = pick_round_words()
     game_state["word_index"] = 0
     game_state["answers"] = {}
     game_state["all_answered_time"] = None
