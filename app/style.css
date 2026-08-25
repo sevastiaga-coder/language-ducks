@@ -201,6 +201,12 @@ body {
   color: var(--text-dim);
 }
 
+.stage-hint {
+  font-size: 18px;
+  color: var(--main);
+  text-align: center;
+}
+
 .word {
   font-family: var(--font-head);
   font-weight: 900;

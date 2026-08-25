@@ -32,6 +32,16 @@
     <div class="all-answered-note" id="all-answered-note" hidden>Все ответили!</div>
   </div>
 
+  <div class="playing-panel" id="fib-panel" hidden>
+    <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
+    <div class="stage-hint">Придумай перевод, чтобы все поверили</div>
+    <div class="word" id="fib-word"></div>
+    <div class="word-language" id="fib-language"></div>
+    <div class="answered-list" id="fib-answered-list"></div>
+    <div class="answered-count" id="fib-answered-count"></div>
+    <div class="all-answered-note" id="fib-all-answered-note" hidden>Все придумали!</div>
+  </div>
+
   <div class="reveal-panel" id="reveal-panel" hidden>
     <div class="reveal-header">
       <div class="reveal-word" id="reveal-word"></div>
@@ -64,6 +74,7 @@
   // те же самые карточки заново каждую секунду — из-за этого они мигали.
   let lastPlayersKey = null;
   let lastAnsweredKey = null;
+  let lastFibKey = null;
   let lastRevealKey = null;
   let lastFinalKey = null;
 
@@ -96,6 +107,7 @@
       const joinPanel = document.querySelector(".join-panel");
       const playersPanel = document.getElementById("players-panel");
       const playingPanel = document.getElementById("playing-panel");
+      const fibPanel = document.getElementById("fib-panel");
       const revealPanel = document.getElementById("reveal-panel");
       const finalPanel = document.getElementById("final-panel");
 
@@ -109,6 +121,7 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
+        fibPanel.hidden = true;
         revealPanel.hidden = true;
         finalPanel.hidden = false;
         renderFinal(info);
@@ -119,9 +132,21 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
+        fibPanel.hidden = true;
         revealPanel.hidden = false;
         finalPanel.hidden = true;
         renderReveal(info);
+        return;
+      }
+
+      if (info.phase === "playing" && info.stage === "trick") {
+        joinPanel.hidden = true;
+        playersPanel.hidden = true;
+        playingPanel.hidden = true;
+        fibPanel.hidden = false;
+        revealPanel.hidden = true;
+        finalPanel.hidden = true;
+        renderFib(info);
         return;
       }
 
@@ -129,6 +154,7 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = false;
+        fibPanel.hidden = true;
         revealPanel.hidden = true;
         finalPanel.hidden = true;
         renderWord(info);
@@ -138,6 +164,7 @@
       joinPanel.hidden = false;
       playersPanel.hidden = false;
       playingPanel.hidden = true;
+      fibPanel.hidden = true;
       revealPanel.hidden = true;
       finalPanel.hidden = true;
       document.getElementById("join-address").textContent = info.address;
@@ -182,6 +209,32 @@
     document.getElementById("answered-count").textContent =
       "Ответили " + info.answeredCount + " из " + info.players.length;
     document.getElementById("all-answered-note").hidden = !info.allAnswered;
+  }
+
+  function renderFib(info) {
+    const wordEl = document.getElementById("fib-word");
+    wordEl.textContent = info.word || "";
+    wordEl.classList.toggle("cyr", isCyrillic(info.word));
+    document.getElementById("fib-language").textContent = info.wordLanguage || "";
+
+    const fibKey = info.wordIndex + "|" + info.players.join(",") + "|" +
+      info.answeredNames.slice().sort().join(",");
+    if (fibKey !== lastFibKey) {
+      lastFibKey = fibKey;
+      const fibList = document.getElementById("fib-answered-list");
+      fibList.innerHTML = "";
+      info.players.forEach((name) => {
+        const item = document.createElement("div");
+        const fibbed = info.answeredNames.includes(name);
+        item.className = "answered-name" + (fibbed ? " answered" : "");
+        item.textContent = (fibbed ? "✓ " : "") + name;
+        fibList.appendChild(item);
+      });
+    }
+
+    document.getElementById("fib-answered-count").textContent =
+      "Придумали " + info.answeredCount + " из " + info.players.length;
+    document.getElementById("fib-all-answered-note").hidden = !info.allAnswered;
   }
 
   function renderReveal(info) {

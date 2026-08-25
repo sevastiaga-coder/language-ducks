@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from words import WORDS
+from words import TRICK_WORDS, WORDS
 
 PORT = 8000
 APP_DIR = Path(__file__).resolve().parent
@@ -31,6 +31,13 @@ MAX_PLAYERS = 10
 MIN_PLAYERS = 2
 MAX_NAME_LENGTH = 12
 WORDS_PER_ROUND = 5
+TRICK_WORDS_PER_ROUND = 3
+# ВРЕМЕННО (выпуск 2, часть 9): пока этапы «Перевод» и «Обманка» не
+# склеены в одну игру (часть 12), партия сразу начинается с «Обманки» —
+# так её можно проверить отдельно, не проходя сперва «Перевод». Когда
+# часть 12 будет готова, эту строку нужно убрать (или поставить False) —
+# и игра пойдёт по обычному порядку: «Перевод» → «Обманка» → финал.
+FIRST_STAGE_IS_TRICK = True
 # Сколько секунд ждём после последнего ответа, прежде чем показать
 # результаты — чтобы последний игрок успел убрать палец от экрана.
 REVEAL_DELAY_SECONDS = 2.0
@@ -48,21 +55,28 @@ POINTS_CORRECT = 100
 # phase — в какой фазе сейчас игра: "lobby" (собираем игроков),
 # "playing" (игра идёт), "final" (финал). Следующие части будут
 # показывать разное в зависимости от этого поля.
-# stage — какой этап игры сейчас идёт: пока только "translate" (этап
-# «Перевод»). Появится позже, когда добавится этап «Обманка».
-# words — слова, выбранные на этот этап игры (5 штук, случайно из
+# stage — какой этап игры сейчас идёт: "translate" (этап «Перевод») или
+# "trick" (этап «Обманка»).
+# words — слова, выбранные на этап «Перевод» (5 штук, случайно из
 # words.py), в порядке, в котором их показывают.
 # word_index — индекс текущего слова в words (0 — первое слово).
-# answers — ответы игроков на текущее слово: id игрока -> его ответ.
-# Очищается, когда игра переходит к следующему слову.
-# all_answered_time — момент (time.time()), когда ответили все игроки.
-# None, пока кто-то ещё не ответил. Нужен, чтобы показать результаты
-# не сразу, а через REVEAL_DELAY_SECONDS — дать время убрать палец.
-# scored_this_word — очки за текущее слово уже начислены игрокам (True)
-# или ещё нет (False). Не даёт начислить очки дважды за одно слово,
-# пока сервер ждёт NEXT_WORD_DELAY_SECONDS перед следующим словом.
+# answers — ответы игроков на текущее слово этапа «Перевод»: id игрока ->
+# его ответ. Очищается, когда игра переходит к следующему слову.
+# all_answered_time — момент (time.time()), когда ответили все игроки на
+# этапе «Перевод». None, пока кто-то ещё не ответил. Нужен, чтобы
+# показать результаты не сразу, а через REVEAL_DELAY_SECONDS — дать
+# время убрать палец.
+# scored_this_word — очки за текущее слово «Перевода» уже начислены
+# игрокам (True) или ещё нет (False). Не даёт начислить очки дважды за
+# одно слово, пока сервер ждёт NEXT_WORD_DELAY_SECONDS перед следующим.
 # previous_words — слова прошлой партии (той, что только что закончилась).
 # Нужны, чтобы при выборе слов новой партии не брать те же самые.
+# trick_words — слова, выбранные на этап «Обманка» (3 штуки, по одному
+# с каждого языка, случайно из words.TRICK_WORDS).
+# trick_index — индекс текущего слова в trick_words.
+# fibs — выдумки игроков на текущее слово этапа «Обманка»: id игрока ->
+# его выдумка. Очищается, когда игра переходит к следующему слову
+# (пока этого перехода нет — он появится вместе с голосованием).
 game_state = {
     "players": [],
     "phase": "lobby",
@@ -73,6 +87,9 @@ game_state = {
     "all_answered_time": None,
     "scored_this_word": False,
     "previous_words": [],
+    "trick_words": [],
+    "trick_index": 0,
+    "fibs": {},
 }
 
 # Защищает переход к следующему слову от гонки: экран и несколько
@@ -183,6 +200,16 @@ def pick_round_words(previous_words):
     return chosen
 
 
+def pick_trick_words():
+    """Выбирает 3 слова на этап «Обманка»: по одному случайному слову
+    с каждого из 3 языков (финский, норвежский, исландский)."""
+    languages = sorted({w["language"] for w in TRICK_WORDS})
+    chosen = [random.choice([w for w in TRICK_WORDS if w["language"] == language])
+              for language in languages]
+    random.shuffle(chosen)
+    return chosen
+
+
 def handle_start(payload):
     """Обрабатывает нажатие «Начать игру» на телефоне ведущего.
 
@@ -201,12 +228,24 @@ def handle_start(payload):
         return {"ok": False, "error": "Нужен хотя бы ещё один игрок"}
 
     game_state["phase"] = "playing"
-    game_state["stage"] = "translate"
-    game_state["words"] = pick_round_words(game_state["previous_words"])
+    game_state["words"] = []
     game_state["word_index"] = 0
     game_state["answers"] = {}
     game_state["all_answered_time"] = None
     game_state["scored_this_word"] = False
+    game_state["trick_words"] = []
+    game_state["trick_index"] = 0
+    game_state["fibs"] = {}
+
+    # FIRST_STAGE_IS_TRICK — временный переключатель на время выпуска 2
+    # (см. константу наверху файла): пока «Перевод» и «Обманка» не
+    # склеены в одну игру, партия начинается сразу с той, что включена.
+    if FIRST_STAGE_IS_TRICK:
+        game_state["stage"] = "trick"
+        game_state["trick_words"] = pick_trick_words()
+    else:
+        game_state["stage"] = "translate"
+        game_state["words"] = pick_round_words(game_state["previous_words"])
     return {"ok": True}
 
 
@@ -221,7 +260,7 @@ def handle_answer(payload):
     player_id = payload.get("id")
     answer_text = (payload.get("answer") or "").strip()
 
-    if game_state["phase"] != "playing":
+    if game_state["phase"] != "playing" or game_state["stage"] != "translate":
         return {"ok": False, "error": "Сейчас не время отвечать"}
 
     player = None
@@ -240,6 +279,52 @@ def handle_answer(payload):
         if len(game_state["answers"]) >= len(game_state["players"]):
             game_state["all_answered_time"] = time.time()
 
+    return {"ok": True}
+
+
+def handle_fib(payload):
+    """Обрабатывает придумку игрока на текущее слово этапа «Обманка».
+
+    Проверяем по порядку: пустая ли придумка, не совпадает ли она с
+    настоящим переводом (тогда это не обманка, а честный ответ — просим
+    попробовать ещё раз) и не совпадает ли она с чьей-то уже отправленной
+    придумкой (иначе на голосовании будет не понятно, за чей вариант
+    голосуют). Каждый игрок придумывает только один раз: если придумка
+    уже сохранена, повторную присланную просто игнорируем.
+    """
+    player_id = payload.get("id")
+    fib_text = (payload.get("fib") or "").strip()
+
+    if game_state["phase"] != "playing" or game_state["stage"] != "trick":
+        return {"ok": False, "error": "Сейчас не время придумывать"}
+
+    player = None
+    for candidate in game_state["players"]:
+        if candidate["id"] == player_id:
+            player = candidate
+            break
+    if not player:
+        return {"ok": False, "error": "Игрок не найден"}
+
+    if not fib_text:
+        return {"ok": False, "error": "Придумка пустая"}
+
+    if player_id in game_state["fibs"]:
+        return {"ok": True}
+
+    if not game_state["trick_words"]:
+        return {"ok": False, "error": "Сейчас не время придумывать"}
+    current_word = game_state["trick_words"][game_state["trick_index"]]
+
+    if is_answer_correct(current_word, fib_text):
+        return {"ok": False, "error": "Ты угадал настоящий перевод! Придумай обманку"}
+
+    normalized_fib = normalize_answer(fib_text)
+    for other_fib in game_state["fibs"].values():
+        if normalize_answer(other_fib) == normalized_fib:
+            return {"ok": False, "error": "Кто-то уже придумал такой же вариант, придумай другой"}
+
+    game_state["fibs"][player_id] = fib_text
     return {"ok": True}
 
 
@@ -329,6 +414,9 @@ def handle_restart(payload):
     game_state["answers"] = {}
     game_state["all_answered_time"] = None
     game_state["scored_this_word"] = False
+    game_state["trick_words"] = []
+    game_state["trick_index"] = 0
+    game_state["fibs"] = {}
     return {"ok": True}
 
 
@@ -404,19 +492,36 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 and game_state["players"][0]["id"] == player_id
             )
 
+            # Слово и «кто уже сдал» — из этапа «Перевод» или «Обманки»,
+            # смотря что сейчас идёт (stage). Оба этапа используют одни и
+            # те же поля ответа (word, answeredNames, myAnswered, ...) —
+            # телефон и экран сами решают, как их подписать.
+            stage = game_state["stage"]
             current_word = None
-            if game_state["phase"] == "playing" and game_state["words"]:
+            word_index_display = 0
+            word_total_display = 0
+            submissions = {}
+            if game_state["phase"] == "playing" and stage == "translate" and game_state["words"]:
                 current_word = game_state["words"][game_state["word_index"]]
+                word_index_display = game_state["word_index"] + 1
+                word_total_display = len(game_state["words"])
+                submissions = game_state["answers"]
+            elif game_state["phase"] == "playing" and stage == "trick" and game_state["trick_words"]:
+                current_word = game_state["trick_words"][game_state["trick_index"]]
+                word_index_display = game_state["trick_index"] + 1
+                word_total_display = len(game_state["trick_words"])
+                submissions = game_state["fibs"]
 
             answered_names = [
                 player["name"] for player in game_state["players"]
-                if player["id"] in game_state["answers"]
+                if player["id"] in submissions
             ]
 
-            # Показываем результаты только через REVEAL_DELAY_SECONDS после
-            # того, как ответил последний игрок — чтобы успел убрать палец.
+            # Раскрытие ответов есть только у «Перевода» — у «Обманки» в
+            # этой части игры дальше голосования (часть 10) пока не идёт.
             revealed = (
-                current_word is not None
+                stage == "translate"
+                and current_word is not None
                 and game_state["all_answered_time"] is not None
                 and (time.time() - game_state["all_answered_time"]) >= REVEAL_DELAY_SECONDS
             )
@@ -466,16 +571,16 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 "phase": game_state["phase"],
                 "isHost": is_host,
                 "stage": game_state["stage"],
-                "wordIndex": game_state["word_index"] + 1 if current_word else 0,
-                "wordTotal": len(game_state["words"]),
+                "wordIndex": word_index_display,
+                "wordTotal": word_total_display,
                 "word": current_word["word"] if current_word else None,
                 "wordLanguage": current_word["language"] if current_word else None,
                 "answeredNames": answered_names,
-                "answeredCount": len(game_state["answers"]),
+                "answeredCount": len(submissions),
                 "allAnswered": bool(game_state["players"])
-                and len(game_state["answers"]) >= len(game_state["players"]),
-                "myAnswered": bool(player_id) and player_id in game_state["answers"],
-                "myAnswerText": game_state["answers"].get(player_id) if player_id else None,
+                and len(submissions) >= len(game_state["players"]),
+                "myAnswered": bool(player_id) and player_id in submissions,
+                "myAnswerText": submissions.get(player_id) if player_id else None,
                 "revealed": revealed,
                 "correctAnswer": current_word["answer"] if revealed else None,
                 "results": results,
@@ -525,6 +630,16 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 payload = {}
             self.send_json(handle_answer(payload))
+            return
+
+        if path == "/api/fib":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw_body = self.rfile.read(length) if length else b"{}"
+            try:
+                payload = json.loads(raw_body.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                payload = {}
+            self.send_json(handle_fib(payload))
             return
 
         if path == "/api/restart":

@@ -42,6 +42,7 @@
     <div class="task-language" id="task-language"></div>
     <input id="answer-input" class="name-input" type="text" maxlength="40" autocomplete="off" placeholder="Твой перевод">
     <button id="answer-btn" class="primary-btn" disabled>ОТВЕТИТЬ</button>
+    <div id="answer-hint" class="field-hint"></div>
     <div class="answered-count" id="phone-answered-count"></div>
   </div>
 
@@ -93,10 +94,12 @@
 
   const answerPlayerName = document.getElementById("answer-player-name");
   const answerQuestionNumber = document.getElementById("answer-question-number");
+  const taskLine = document.querySelector(".task-line");
   const taskWord = document.getElementById("task-word");
   const taskLanguage = document.getElementById("task-language");
   const answerInput = document.getElementById("answer-input");
   const answerBtn = document.getElementById("answer-btn");
+  const answerHint = document.getElementById("answer-hint");
   const phoneAnsweredCount = document.getElementById("phone-answered-count");
 
   const submittedPlayerName = document.getElementById("submitted-player-name");
@@ -126,6 +129,9 @@
   // очистить поле ввода — иначе каждый опрос стирал бы то, что
   // игрок сейчас печатает.
   let currentWordIndex = null;
+  // Какой этап сейчас идёт ("translate" или "trick") — от этого
+  // зависят подписи на экране ввода ответа (Т3).
+  let currentStage = null;
 
   function hideAllViews() {
     // Логотип показываем только на экране входа (Т1) — на остальных
@@ -192,34 +198,45 @@
   function renderAnswerView(info) {
     hideAllViews();
     answerView.hidden = false;
+    const isTrick = info.stage === "trick";
+    currentStage = info.stage;
     answerQuestionNumber.textContent = "Слово " + info.wordIndex + " из " + info.wordTotal;
+    taskLine.firstChild.textContent = isTrick ? "Придумай перевод: " : "Переведи: ";
     taskWord.textContent = info.word || "";
     taskWord.classList.toggle("cyr", isCyrillic(info.word));
     taskLanguage.textContent = info.wordLanguage ? "язык: " + info.wordLanguage : "";
+    answerInput.placeholder = isTrick ? "Твоя выдумка" : "Твой перевод";
+    answerBtn.textContent = isTrick ? "ПРИДУМАТЬ" : "ОТВЕТИТЬ";
 
     if (currentWordIndex !== info.wordIndex) {
       currentWordIndex = info.wordIndex;
       answerInput.value = "";
       answerBtn.disabled = true;
+      answerHint.textContent = "";
       // Фокус ставим только когда слово реально сменилось — иначе
       // каждый секундный опрос сервера выдёргивал бы клавиатуру
       // прямо во время набора ответа.
       answerInput.focus();
     }
-    phoneAnsweredCount.textContent = "Ответили " + info.answeredCount + " из " + info.playerCount;
+    phoneAnsweredCount.textContent =
+      (isTrick ? "Придумали " : "Ответили ") + info.answeredCount + " из " + info.playerCount;
   }
 
   function renderSubmittedView(info) {
     hideAllViews();
     submittedView.hidden = false;
+    const isTrick = info.stage === "trick";
     submittedAnswerText.textContent = info.myAnswered ? (info.myAnswerText || "") : "";
-    submittedAnsweredCount.textContent = "Ответили " + info.answeredCount + " из " + info.playerCount;
+    submittedAnsweredCount.textContent =
+      (isTrick ? "Придумали " : "Ответили ") + info.answeredCount + " из " + info.playerCount;
 
     if (!info.revealed) {
       submittedCheck.hidden = false;
       submittedCheck.textContent = "✓";
       submittedCheck.classList.remove("wrong");
-      submittedStatus.textContent = "Ответ принят, жди остальных";
+      submittedStatus.textContent = isTrick
+        ? "Придумка принята, жди остальных"
+        : "Ответ принят, жди остальных";
       pointsEarned.hidden = true;
       myScoreLine.hidden = true;
       myRankLine.hidden = true;
@@ -352,11 +369,18 @@
       return;
     }
     answerBtn.disabled = true;
-    const result = await sendAnswer(myPlayerId, answer);
+    answerHint.textContent = "";
+    const result = currentStage === "trick"
+      ? await sendFib(myPlayerId, answer)
+      : await sendAnswer(myPlayerId, answer);
     if (result.ok) {
       const info = await fetchGameInfo(myPlayerId);
       renderPhase(info);
     } else {
+      // Ошибка на «Обманке» (угадал настоящий перевод или совпал с чужой
+      // придумкой) не отправляется молча — показываем её и даём
+      // попробовать ещё раз, не очищая поле, чтобы можно было поправить.
+      answerHint.textContent = result.error || "";
       answerBtn.disabled = false;
     }
   }

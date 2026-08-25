@@ -38,6 +38,16 @@ async function sendAnswer(playerId, answer) {
   return response.json();
 }
 
+// Игрок отправляет выдумку на текущее слово этапа «Обманка».
+async function sendFib(playerId, fib) {
+  const response = await fetch("/api/fib", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: playerId, fib: fib }),
+  });
+  return response.json();
+}
+
 // Ведущий нажал «Сыграть ещё раз» в финале.
 async function restartGame(playerId) {
   const response = await fetch("/api/restart", {
