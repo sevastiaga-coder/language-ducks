@@ -68,6 +68,21 @@
     <div class="next-word-note" id="next-word-note">Следующее слово через несколько секунд</div>
   </div>
 
+  <div class="reveal-panel" id="trick-reveal-panel" hidden>
+    <div class="reveal-header">
+      <div class="reveal-word" id="trick-reveal-word"></div>
+      <div class="word-language" id="trick-reveal-language"></div>
+      <div class="reveal-correct">Настоящий перевод: <span id="trick-reveal-correct-answer"></span></div>
+    </div>
+    <div class="reveal-body">
+      <div class="reveal-cards" id="trick-reveal-cards"></div>
+      <div class="reveal-side">
+        <div class="scoreboard" id="trick-scoreboard"></div>
+      </div>
+    </div>
+    <div class="next-word-note" id="trick-next-word-note">Следующее слово через несколько секунд</div>
+  </div>
+
   <div class="final-panel" id="final-panel" hidden>
     <div class="winner-label" id="winner-label">ПОБЕДИТЕЛЬ</div>
     <div class="winner-name word" id="winner-name"></div>
@@ -89,6 +104,7 @@
   let lastVoteKey = null;
   let lastVoteVotedKey = null;
   let lastRevealKey = null;
+  let lastTrickRevealKey = null;
   let lastFinalKey = null;
 
   function renderPlayers(names) {
@@ -123,6 +139,7 @@
       const fibPanel = document.getElementById("fib-panel");
       const votePanel = document.getElementById("vote-panel");
       const revealPanel = document.getElementById("reveal-panel");
+      const trickRevealPanel = document.getElementById("trick-reveal-panel");
       const finalPanel = document.getElementById("final-panel");
 
       // Логотип во весь рост нужен только пока собираем игроков (Л1) —
@@ -138,6 +155,7 @@
         fibPanel.hidden = true;
         votePanel.hidden = true;
         revealPanel.hidden = true;
+        trickRevealPanel.hidden = true;
         finalPanel.hidden = false;
         renderFinal(info);
         return;
@@ -150,8 +168,22 @@
         fibPanel.hidden = true;
         votePanel.hidden = true;
         revealPanel.hidden = false;
+        trickRevealPanel.hidden = true;
         finalPanel.hidden = true;
         renderReveal(info);
+        return;
+      }
+
+      if (info.phase === "playing" && info.stage === "trick" && info.trickRevealed) {
+        joinPanel.hidden = true;
+        playersPanel.hidden = true;
+        playingPanel.hidden = true;
+        fibPanel.hidden = true;
+        votePanel.hidden = true;
+        revealPanel.hidden = true;
+        trickRevealPanel.hidden = false;
+        finalPanel.hidden = true;
+        renderTrickReveal(info);
         return;
       }
 
@@ -162,6 +194,7 @@
         fibPanel.hidden = true;
         votePanel.hidden = false;
         revealPanel.hidden = true;
+        trickRevealPanel.hidden = true;
         finalPanel.hidden = true;
         renderVote(info);
         return;
@@ -174,6 +207,7 @@
         fibPanel.hidden = false;
         votePanel.hidden = true;
         revealPanel.hidden = true;
+        trickRevealPanel.hidden = true;
         finalPanel.hidden = true;
         renderFib(info);
         return;
@@ -186,6 +220,7 @@
         fibPanel.hidden = true;
         votePanel.hidden = true;
         revealPanel.hidden = true;
+        trickRevealPanel.hidden = true;
         finalPanel.hidden = true;
         renderWord(info);
         return;
@@ -197,6 +232,7 @@
       fibPanel.hidden = true;
       votePanel.hidden = true;
       revealPanel.hidden = true;
+      trickRevealPanel.hidden = true;
       finalPanel.hidden = true;
       document.getElementById("join-address").textContent = info.address;
       document.getElementById("players-count").textContent =
@@ -385,6 +421,109 @@
     });
 
     const scoreboardContainer = document.getElementById("scoreboard");
+    scoreboardContainer.innerHTML = "";
+    const topScore = info.scoreboard.length ? info.scoreboard[0].score : -1;
+    info.scoreboard.forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "scoreboard-row" + (entry.score === topScore ? " leader" : "");
+      const nameEl = document.createElement("div");
+      nameEl.textContent = entry.name;
+      const scoreEl = document.createElement("div");
+      scoreEl.className = "scoreboard-score";
+      scoreEl.textContent = entry.score;
+      row.appendChild(nameEl);
+      row.appendChild(scoreEl);
+      scoreboardContainer.appendChild(row);
+    });
+  }
+
+  function renderTrickReveal(info) {
+    const wordEl = document.getElementById("trick-reveal-word");
+    wordEl.textContent = info.word || "";
+    wordEl.classList.toggle("cyr", isCyrillic(info.word));
+    document.getElementById("trick-reveal-language").textContent = info.wordLanguage || "";
+    document.getElementById("trick-reveal-correct-answer").textContent = info.trickCorrectAnswer || "";
+
+    // На последнем слове «Обманки» дальше идёт финал, а не следующее
+    // слово — та же честная подпись, что и у «Перевода».
+    const isLastWord = info.wordIndex >= info.wordTotal;
+    document.getElementById("trick-next-word-note").textContent =
+      isLastWord ? "Считаем итоги" : "Следующее слово через несколько секунд";
+
+    // Пересоздаём карточки и таблицу очков только когда слово или сами
+    // итоги реально изменились — тот же трюк против мигания, что и в renderReveal.
+    const trickRevealKey = info.word + "|" + JSON.stringify(info.trickResults) + "|" + JSON.stringify(info.scoreboard);
+    if (trickRevealKey === lastTrickRevealKey) {
+      return;
+    }
+    lastTrickRevealKey = trickRevealKey;
+
+    const cardsContainer = document.getElementById("trick-reveal-cards");
+    cardsContainer.innerHTML = "";
+    // Карточки «Обманки» выше карточек «Перевода» (у них ещё строка
+    // про голоса), поэтому при большом числе игроков одного второго
+    // столбца, как у «Перевода», не хватает — переходим сразу на три.
+    cardsContainer.classList.remove("two-col", "three-col");
+    if (info.trickResults.length > 7) {
+      cardsContainer.classList.add("three-col");
+    } else if (info.trickResults.length > 4) {
+      cardsContainer.classList.add("two-col");
+    }
+    info.trickResults.forEach((result, index) => {
+      const card = document.createElement("div");
+      card.className = "answer-card" + (result.isReal ? " correct" : "");
+      card.style.animationDelay = (index * 150) + "ms";
+
+      const infoBlock = document.createElement("div");
+      infoBlock.className = "answer-card-info";
+
+      // Одна строка на автора/голоса — так карточка «Обманки» той же
+      // высоты, что и карточка ответа «Перевода» (имя + ответ), и при
+      // 10 игроках (11 вариантов) помещается в два столбца без прокрутки.
+      const label = document.createElement("div");
+      label.className = "answer-card-name";
+      // При большом числе голосов список имён сокращаем — иначе строка
+      // становится длиннее ширины колонки и разваливается по словам.
+      let votersText = null;
+      if (result.voterNames.length) {
+        const shown = result.voterNames.slice(0, 3).join(", ");
+        const rest = result.voterNames.length - 3;
+        votersText = rest > 0 ? shown + " и ещё " + rest : shown;
+      }
+      if (result.isReal) {
+        label.textContent = "№" + result.number + " · " + (votersText ? "нашли: " + votersText : "никто не нашёл");
+      } else {
+        label.textContent = "№" + result.number + " · придумал: " + result.authorName +
+          " · " + (votersText ? "обманул: " + votersText : "никто не попался");
+      }
+
+      const textEl = document.createElement("div");
+      textEl.className = "answer-card-text";
+      textEl.textContent = result.text;
+
+      infoBlock.appendChild(label);
+      infoBlock.appendChild(textEl);
+
+      const right = document.createElement("div");
+      right.className = "answer-card-right";
+
+      const verdict = document.createElement("div");
+      verdict.className = "answer-card-verdict";
+      verdict.textContent = result.isReal ? "НАСТОЯЩИЙ" : "";
+
+      const points = document.createElement("div");
+      points.className = "answer-card-points" + (result.points > 0 ? "" : " zero");
+      points.textContent = "+" + result.points;
+
+      right.appendChild(verdict);
+      right.appendChild(points);
+
+      card.appendChild(infoBlock);
+      card.appendChild(right);
+      cardsContainer.appendChild(card);
+    });
+
+    const scoreboardContainer = document.getElementById("trick-scoreboard");
     scoreboardContainer.innerHTML = "";
     const topScore = info.scoreboard.length ? info.scoreboard[0].score : -1;
     info.scoreboard.forEach((entry) => {

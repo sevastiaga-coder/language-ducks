@@ -46,6 +46,11 @@ REVEAL_DELAY_SECONDS = 2.0
 NEXT_WORD_DELAY_SECONDS = 9.0
 # Сколько очков даёт правильный ответ. Неверный или пропущенный — 0.
 POINTS_CORRECT = 100
+# Очки за «Обманку» (решение босса): столько получает тот, кто нашёл
+# настоящий перевод...
+POINTS_TRICK_GUESS = 200
+# ...и столько получает автор выдумки — за каждого, кто на неё попался.
+POINTS_TRICK_FOOLED = 100
 
 # Состояние игры целиком живёт здесь, в памяти сервера.
 # Дальше, в следующих частях, сюда добавятся вопросы, очки и т.д.
@@ -71,6 +76,7 @@ POINTS_CORRECT = 100
 # одно слово, пока сервер ждёт NEXT_WORD_DELAY_SECONDS перед следующим.
 # previous_words — слова прошлой партии (той, что только что закончилась).
 # Нужны, чтобы при выборе слов новой партии не брать те же самые.
+# previous_trick_words — то же самое, но для слов «Обманки».
 # trick_words — слова, выбранные на этап «Обманка» (3 штуки, по одному
 # с каждого языка, случайно из words.TRICK_WORDS).
 # trick_index — индекс текущего слова в trick_words.
@@ -93,6 +99,12 @@ POINTS_CORRECT = 100
 # собственный.
 # votes — голоса игроков за текущее слово: id игрока -> индекс варианта,
 # за который он проголосовал.
+# votes_all_time — момент (time.time()), когда проголосовали все игроки.
+# None, пока кто-то ещё не проголосовал. Как и fibs_all_time, нужен,
+# чтобы раскрыть итоги не сразу, а через REVEAL_DELAY_SECONDS.
+# trick_scored_this_word — очки за текущее слово «Обманки» уже начислены
+# (True) или ещё нет (False). Не даёт начислить очки дважды за одно
+# слово, пока сервер ждёт NEXT_WORD_DELAY_SECONDS перед следующим.
 game_state = {
     "players": [],
     "phase": "lobby",
@@ -103,6 +115,7 @@ game_state = {
     "all_answered_time": None,
     "scored_this_word": False,
     "previous_words": [],
+    "previous_trick_words": [],
     "trick_words": [],
     "trick_index": 0,
     "fibs": {},
@@ -111,6 +124,8 @@ game_state = {
     "vote_options": [],
     "vote_owners": [],
     "votes": {},
+    "votes_all_time": None,
+    "trick_scored_this_word": False,
 }
 
 # Защищает переход к следующему слову от гонки: экран и несколько
@@ -221,12 +236,20 @@ def pick_round_words(previous_words):
     return chosen
 
 
-def pick_trick_words():
+def pick_trick_words(previous_trick_words):
     """Выбирает 3 слова на этап «Обманка»: по одному случайному слову
-    с каждого из 3 языков (финский, норвежский, исландский)."""
+    с каждого из 3 языков (финский, норвежский, исландский).
+
+    previous_trick_words — слова прошлой партии, тем же способом, что и
+    в pick_round_words: у каждого языка 4 слова, одно было в прошлый
+    раз — выбираем из оставшихся трёх, чтобы партии не повторялись."""
     languages = sorted({w["language"] for w in TRICK_WORDS})
-    chosen = [random.choice([w for w in TRICK_WORDS if w["language"] == language])
-              for language in languages]
+    previous_texts = {w["word"] for w in previous_trick_words}
+    chosen = []
+    for language in languages:
+        candidates = [w for w in TRICK_WORDS if w["language"] == language]
+        fresh_candidates = [w for w in candidates if w["word"] not in previous_texts]
+        chosen.append(random.choice(fresh_candidates or candidates))
     random.shuffle(chosen)
     return chosen
 
@@ -262,13 +285,15 @@ def handle_start(payload):
     game_state["vote_options"] = []
     game_state["vote_owners"] = []
     game_state["votes"] = {}
+    game_state["votes_all_time"] = None
+    game_state["trick_scored_this_word"] = False
 
     # FIRST_STAGE_IS_TRICK — временный переключатель на время выпуска 2
     # (см. константу наверху файла): пока «Перевод» и «Обманка» не
     # склеены в одну игру, партия начинается сразу с той, что включена.
     if FIRST_STAGE_IS_TRICK:
         game_state["stage"] = "trick"
-        game_state["trick_words"] = pick_trick_words()
+        game_state["trick_words"] = pick_trick_words(game_state["previous_trick_words"])
     else:
         game_state["stage"] = "translate"
         game_state["words"] = pick_round_words(game_state["previous_words"])
@@ -400,6 +425,8 @@ def handle_vote(payload):
         return {"ok": False, "error": "За свой вариант голосовать нельзя"}
 
     game_state["votes"][player_id] = index
+    if len(game_state["votes"]) >= len(game_state["players"]):
+        game_state["votes_all_time"] = time.time()
     return {"ok": True}
 
 
@@ -453,35 +480,92 @@ def advance_translate():
 
 
 def advance_trick():
-    """Переводит текущее слово «Обманки» из «придумываем» в «голосуем»,
-    спустя REVEAL_DELAY_SECONDS после того, как придумали все.
+    """Двигает этап «Обманка» по времени в двух местах:
 
-    Порядок вариантов (придумки всех игроков + настоящий перевод)
-    перемешивается ровно один раз, прямо здесь — а не отдельно для
-    экрана и для каждого телефона — иначе номера вариантов разойдутся
-    между устройствами. Раскрытие итогов голосования и переход к
-    следующему слову «Обманки» — уже часть 11, здесь не делаем.
+    1. Переводит текущее слово из «придумываем» в «голосуем», спустя
+       REVEAL_DELAY_SECONDS после того, как придумали все. Порядок
+       вариантов (придумки всех игроков + настоящий перевод)
+       перемешивается ровно один раз, прямо здесь — а не отдельно для
+       экрана и для каждого телефона — иначе номера вариантов
+       разойдутся между устройствами.
+    2. Спустя REVEAL_DELAY_SECONDS после того, как проголосовали все,
+       начисляет очки за раскрытые итоги (score_trick_word) и, ещё
+       через NEXT_WORD_DELAY_SECONDS, переходит к следующему слову
+       «Обманки» или — после последнего — к финалу.
     """
-    if game_state["trick_stage"] != "collecting":
-        return
     if not game_state["trick_words"]:
         return
-    if game_state["fibs_all_time"] is None:
+
+    if game_state["trick_stage"] == "collecting":
+        if game_state["fibs_all_time"] is None:
+            return
+        reveal_time = game_state["fibs_all_time"] + REVEAL_DELAY_SECONDS
+        if time.time() < reveal_time:
+            return
+
+        current_word = game_state["trick_words"][game_state["trick_index"]]
+        options = list(game_state["fibs"].values()) + [current_word["answer"]]
+        owners = list(game_state["fibs"].keys()) + [None]
+        combined = list(zip(options, owners))
+        random.shuffle(combined)
+        game_state["vote_options"] = [text for text, _owner in combined]
+        game_state["vote_owners"] = [owner for _text, owner in combined]
+        game_state["votes"] = {}
+        game_state["votes_all_time"] = None
+        game_state["trick_scored_this_word"] = False
+        game_state["trick_stage"] = "voting"
         return
 
-    reveal_time = game_state["fibs_all_time"] + REVEAL_DELAY_SECONDS
-    if time.time() < reveal_time:
-        return
+    if game_state["trick_stage"] == "voting":
+        if game_state["votes_all_time"] is None:
+            return
+        reveal_time = game_state["votes_all_time"] + REVEAL_DELAY_SECONDS
+        now = time.time()
+        if now < reveal_time:
+            return
 
-    current_word = game_state["trick_words"][game_state["trick_index"]]
-    options = list(game_state["fibs"].values()) + [current_word["answer"]]
-    owners = list(game_state["fibs"].keys()) + [None]
-    combined = list(zip(options, owners))
-    random.shuffle(combined)
-    game_state["vote_options"] = [text for text, _owner in combined]
-    game_state["vote_owners"] = [owner for _text, owner in combined]
-    game_state["votes"] = {}
-    game_state["trick_stage"] = "voting"
+        if not game_state["trick_scored_this_word"]:
+            score_trick_word()
+            game_state["trick_scored_this_word"] = True
+
+        if now - reveal_time >= NEXT_WORD_DELAY_SECONDS:
+            if game_state["trick_index"] + 1 < len(game_state["trick_words"]):
+                game_state["trick_index"] += 1
+                game_state["fibs"] = {}
+                game_state["fibs_all_time"] = None
+                game_state["trick_stage"] = "collecting"
+                game_state["vote_options"] = []
+                game_state["vote_owners"] = []
+                game_state["votes"] = {}
+                game_state["votes_all_time"] = None
+                game_state["trick_scored_this_word"] = False
+            else:
+                game_state["phase"] = "final"
+
+
+def add_score(player_id, points):
+    """Прибавляет очки игроку по его id. Если id не найден — молча
+    ничего не делает (например, автор None у настоящего перевода)."""
+    for player in game_state["players"]:
+        if player["id"] == player_id:
+            player["score"] += points
+            return
+
+
+def score_trick_word():
+    """Начисляет очки за раскрытый итог текущего слова «Обманки»
+    (решение босса): POINTS_TRICK_GUESS тому, кто проголосовал за
+    настоящий перевод, и POINTS_TRICK_FOOLED автору выдумки — за
+    каждого, кто на неё попался. Не проголосовавший ничего не
+    получает, автор выдумки без единого голоса — тоже, потому что по
+    нему просто не найдётся ни одного голоса в votes."""
+    real_index = game_state["vote_owners"].index(None)
+    for voter_id, chosen_index in game_state["votes"].items():
+        if chosen_index == real_index:
+            add_score(voter_id, POINTS_TRICK_GUESS)
+        else:
+            fibber_id = game_state["vote_owners"][chosen_index]
+            add_score(fibber_id, POINTS_TRICK_FOOLED)
 
 
 def compute_ranks(sorted_players):
@@ -522,8 +606,9 @@ def handle_restart(payload):
         player["score"] = 0
 
     # Запоминаем слова только что законченной партии — pick_round_words
-    # использует их, чтобы не повторить в новой партии.
+    # и pick_trick_words используют их, чтобы не повторить в новой партии.
     game_state["previous_words"] = game_state["words"]
+    game_state["previous_trick_words"] = game_state["trick_words"]
 
     game_state["phase"] = "lobby"
     game_state["stage"] = None
@@ -540,6 +625,8 @@ def handle_restart(payload):
     game_state["vote_options"] = []
     game_state["vote_owners"] = []
     game_state["votes"] = {}
+    game_state["votes_all_time"] = None
+    game_state["trick_scored_this_word"] = False
     return {"ok": True}
 
 
@@ -707,6 +794,63 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             all_voted = voting and bool(game_state["players"]) and voted_count >= len(game_state["players"])
             my_voted = voting and bool(player_id) and player_id in game_state["votes"]
 
+            # Итог «Обманки» (Л6 + Т5, часть 11): раскрывается спустя
+            # REVEAL_DELAY_SECONDS после того, как проголосовали все —
+            # тем же способом, что и revealed у «Перевода» выше, только
+            # своё поле, потому что у «Обманки» два разных раскрытия
+            # (кто придумал что и кто как проголосовал).
+            trick_revealed = (
+                current_word is not None
+                and voting
+                and game_state["votes_all_time"] is not None
+                and (time.time() - game_state["votes_all_time"]) >= REVEAL_DELAY_SECONDS
+            )
+
+            trick_results = []
+            my_vote_correct = False
+            my_fooled_count = 0
+            my_fooled_by_name = None
+            my_guess_points = 0
+            my_fooled_points = 0
+            trick_correct_answer = None
+            if trick_revealed:
+                trick_correct_answer = current_word["answer"]
+                id_to_name = {player["id"]: player["name"] for player in game_state["players"]}
+                real_index = game_state["vote_owners"].index(None)
+                for index, (text, owner_id) in enumerate(
+                    zip(game_state["vote_options"], game_state["vote_owners"])
+                ):
+                    is_real = owner_id is None
+                    voter_names = [
+                        id_to_name[voter_id] for voter_id, chosen_index in game_state["votes"].items()
+                        if chosen_index == index and voter_id in id_to_name
+                    ]
+                    trick_results.append({
+                        "number": index + 1,
+                        "text": text,
+                        "isReal": is_real,
+                        "authorName": None if is_real else id_to_name.get(owner_id),
+                        "voterNames": voter_names,
+                        "points": (POINTS_TRICK_GUESS if is_real else POINTS_TRICK_FOOLED)
+                        if voter_names else 0,
+                    })
+
+                if player_id and player_id in game_state["votes"]:
+                    my_vote_correct = game_state["votes"][player_id] == real_index
+                    if not my_vote_correct:
+                        fibber_id = game_state["vote_owners"][game_state["votes"][player_id]]
+                        my_fooled_by_name = id_to_name.get(fibber_id)
+                if player_id and player_id in game_state["vote_owners"]:
+                    my_fib_index = game_state["vote_owners"].index(player_id)
+                    my_fooled_count = sum(
+                        1 for chosen_index in game_state["votes"].values() if chosen_index == my_fib_index
+                    )
+
+                if player_id:
+                    my_guess_points = POINTS_TRICK_GUESS if my_vote_correct else 0
+                    my_fooled_points = POINTS_TRICK_FOOLED * my_fooled_count
+                    my_points = my_guess_points + my_fooled_points
+
             self.send_json({
                 "address": "{}:{}".format(LOCAL_IP, PORT),
                 "playerCount": len(game_state["players"]),
@@ -739,6 +883,14 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 "votedCount": voted_count,
                 "allVoted": all_voted,
                 "myVoted": my_voted,
+                "trickRevealed": trick_revealed,
+                "trickCorrectAnswer": trick_correct_answer,
+                "trickResults": trick_results,
+                "myVoteCorrect": my_vote_correct,
+                "myFooledCount": my_fooled_count,
+                "myFooledByName": my_fooled_by_name,
+                "myGuessPoints": my_guess_points,
+                "myFooledPoints": my_fooled_points,
             })
             return
 

@@ -59,6 +59,15 @@
     <div class="waiting-text">Голос принят, жди остальных</div>
   </div>
 
+  <div id="trick-result-view" class="waiting-view" hidden>
+    <div class="waiting-name">Ты играешь как <span id="trick-result-player-name"></span></div>
+    <div class="points-earned" id="trick-points-earned"></div>
+    <div class="waiting-text" id="trick-result-status"></div>
+    <div class="my-score-line dim" id="trick-guess-line"></div>
+    <div class="my-score-line dim" id="trick-fooled-line"></div>
+    <div class="my-score-line" id="trick-score-line"></div>
+  </div>
+
   <div id="submitted-view" class="waiting-view" hidden>
     <div class="waiting-name">Ты играешь как <span id="submitted-player-name"></span></div>
     <div class="submitted-check" id="submitted-check">✓</div>
@@ -123,6 +132,14 @@
   const voteOptionsList = document.getElementById("vote-options-list");
   const voteSubmittedPlayerName = document.getElementById("vote-submitted-player-name");
 
+  const trickResultView = document.getElementById("trick-result-view");
+  const trickResultPlayerName = document.getElementById("trick-result-player-name");
+  const trickPointsEarned = document.getElementById("trick-points-earned");
+  const trickResultStatus = document.getElementById("trick-result-status");
+  const trickGuessLine = document.getElementById("trick-guess-line");
+  const trickFooledLine = document.getElementById("trick-fooled-line");
+  const trickScoreLine = document.getElementById("trick-score-line");
+
   const submittedPlayerName = document.getElementById("submitted-player-name");
   const submittedCheck = document.getElementById("submitted-check");
   const pointsEarned = document.getElementById("points-earned");
@@ -167,6 +184,7 @@
     answerView.hidden = true;
     voteView.hidden = true;
     voteSubmittedView.hidden = true;
+    trickResultView.hidden = true;
     submittedView.hidden = true;
     finalView.hidden = true;
   }
@@ -327,6 +345,25 @@
     voteSubmittedView.hidden = false;
   }
 
+  function renderTrickResultView(info) {
+    hideAllViews();
+    trickResultView.hidden = false;
+
+    trickPointsEarned.textContent = "+" + info.myPoints;
+    trickPointsEarned.classList.toggle("zero", info.myPoints === 0);
+
+    trickResultStatus.textContent = info.myVoteCorrect
+      ? "Ты нашёл настоящий перевод!"
+      : "Мимо! Тебя обманул " + info.myFooledByName;
+
+    trickGuessLine.textContent = "За угадывание: +" + info.myGuessPoints;
+    trickFooledLine.textContent = info.myFooledCount > 0
+      ? "За обманутых (" + info.myFooledCount + "): +" + info.myFooledPoints
+      : "Твою выдумку не выбрал никто";
+
+    trickScoreLine.textContent = "Твои очки: " + info.myScore;
+  }
+
   function renderFinalView(info) {
     hideAllViews();
     finalView.hidden = false;
@@ -349,7 +386,9 @@
       return;
     }
     if (info.phase === "playing") {
-      if (info.stage === "trick" && info.trickStage === "voting") {
+      if (info.stage === "trick" && info.trickRevealed) {
+        renderTrickResultView(info);
+      } else if (info.stage === "trick" && info.trickStage === "voting") {
         if (info.myVoted) {
           renderVoteSubmittedView(info);
         } else {
@@ -384,6 +423,7 @@
     answerPlayerName.textContent = name;
     votePlayerName.textContent = name;
     voteSubmittedPlayerName.textContent = name;
+    trickResultPlayerName.textContent = name;
     submittedPlayerName.textContent = name;
     finalPlayerName.textContent = name;
     startPolling();
