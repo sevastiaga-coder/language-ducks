@@ -37,3 +37,13 @@ async function sendAnswer(playerId, answer) {
   });
   return response.json();
 }
+
+// Ведущий нажал «Сыграть ещё раз» в финале.
+async function restartGame(playerId) {
+  const response = await fetch("/api/restart", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: playerId }),
+  });
+  return response.json();
+}

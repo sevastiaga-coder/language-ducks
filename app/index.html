@@ -56,7 +56,17 @@
   </div>
 
   <div id="final-view" class="waiting-view" hidden>
-    <div class="waiting-text">Игра окончена, смотри на большой экран</div>
+    <div class="waiting-name">Ты играешь как <span id="final-player-name"></span></div>
+    <div class="waiting-text">Игра окончена!</div>
+    <div class="my-score-line" id="final-score-line"></div>
+    <div class="my-score-line" id="final-rank-line"></div>
+
+    <div id="final-host-controls" class="host-controls" hidden>
+      <button id="restart-btn" class="primary-btn">СЫГРАТЬ ЕЩЁ РАЗ</button>
+      <div id="restart-hint" class="join-hint"></div>
+    </div>
+
+    <div id="final-guest-note" class="guest-note" hidden>Ведущий может начать новую игру</div>
   </div>
 </div>
 
@@ -94,6 +104,14 @@
   const submittedAnsweredCount = document.getElementById("submitted-answered-count");
   const myScoreLine = document.getElementById("my-score-line");
   const myRankLine = document.getElementById("my-rank-line");
+
+  const finalPlayerName = document.getElementById("final-player-name");
+  const finalScoreLine = document.getElementById("final-score-line");
+  const finalRankLine = document.getElementById("final-rank-line");
+  const finalHostControls = document.getElementById("final-host-controls");
+  const finalGuestNote = document.getElementById("final-guest-note");
+  const restartBtn = document.getElementById("restart-btn");
+  const restartHint = document.getElementById("restart-hint");
 
   let myPlayerId = null;
   let pollTimer = null;
@@ -188,12 +206,25 @@
     myRankLine.textContent = "Ты на " + info.myRank + " месте";
   }
 
+  function renderFinalView(info) {
+    hideAllViews();
+    finalView.hidden = false;
+    finalScoreLine.textContent = "Твои очки: " + info.myScore;
+    finalRankLine.textContent = "Ты на " + info.myRank + " месте";
+    if (info.isHost) {
+      finalHostControls.hidden = false;
+      finalGuestNote.hidden = true;
+    } else {
+      finalHostControls.hidden = true;
+      finalGuestNote.hidden = false;
+    }
+  }
+
   // Решает, какой экран телефона показать прямо сейчас, по свежим
   // данным с сервера.
   function renderPhase(info) {
     if (info.phase === "final") {
-      hideAllViews();
-      finalView.hidden = false;
+      renderFinalView(info);
       return;
     }
     if (info.phase === "playing") {
@@ -225,6 +256,7 @@
     playerNameLabel.textContent = name;
     answerPlayerName.textContent = name;
     submittedPlayerName.textContent = name;
+    finalPlayerName.textContent = name;
     startPolling();
   }
 
@@ -293,6 +325,17 @@
   answerInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !answerBtn.disabled) {
       submitAnswer();
+    }
+  });
+
+  restartBtn.addEventListener("click", async () => {
+    restartBtn.disabled = true;
+    const result = await restartGame(myPlayerId);
+    if (result.ok) {
+      currentWordIndex = null;
+    } else {
+      restartHint.textContent = result.error;
+      restartBtn.disabled = false;
     }
   });
 

@@ -44,7 +44,11 @@
   </div>
 
   <div class="final-panel" id="final-panel" hidden>
-    <div class="final-title">ИГРА ОКОНЧЕНА</div>
+    <div class="winner-label" id="winner-label">ПОБЕДИТЕЛЬ</div>
+    <div class="winner-name word" id="winner-name"></div>
+    <div class="winner-score" id="winner-score"></div>
+    <div class="final-standings" id="final-standings"></div>
+    <div class="final-note">Ведущий может начать новую игру со своего телефона</div>
   </div>
 </div>
 
@@ -57,6 +61,7 @@
   let lastPlayersKey = null;
   let lastAnsweredKey = null;
   let lastRevealKey = null;
+  let lastFinalKey = null;
 
   function renderPlayers(names) {
     const key = names.join("|");
@@ -96,6 +101,7 @@
         playingPanel.hidden = true;
         revealPanel.hidden = true;
         finalPanel.hidden = false;
+        renderFinal(info);
         return;
       }
 
@@ -228,6 +234,52 @@
       row.appendChild(nameEl);
       row.appendChild(scoreEl);
       scoreboardContainer.appendChild(row);
+    });
+  }
+
+  function renderFinal(info) {
+    // Пересоздаём только когда таблица очков реально изменилась —
+    // тот же трюк, что и в renderReveal, чтобы экран не мигал.
+    const finalKey = JSON.stringify(info.scoreboard);
+    if (finalKey === lastFinalKey) {
+      return;
+    }
+    lastFinalKey = finalKey;
+
+    const standings = info.scoreboard;
+    const winners = standings.filter((entry) => entry.rank === 1);
+
+    document.getElementById("winner-label").textContent =
+      winners.length > 1 ? "ПОБЕДИТЕЛИ" : "ПОБЕДИТЕЛЬ";
+    document.getElementById("winner-name").textContent =
+      winners.map((winner) => winner.name).join(" и ");
+    document.getElementById("winner-score").textContent =
+      winners.length ? (winners[0].score + " очков") : "";
+
+    const container = document.getElementById("final-standings");
+    container.innerHTML = "";
+    standings.forEach((entry, index) => {
+      const row = document.createElement("div");
+      const isTop3 = entry.rank <= 3;
+      row.className = "standings-row" + (isTop3 ? " top3" : "") + (entry.rank === 1 ? " first" : "");
+      row.style.animationDelay = (index * 150) + "ms";
+
+      const place = document.createElement("div");
+      place.className = "standings-place";
+      place.textContent = "#" + entry.rank;
+
+      const name = document.createElement("div");
+      name.className = "standings-name";
+      name.textContent = entry.name;
+
+      const score = document.createElement("div");
+      score.className = "standings-score";
+      score.textContent = entry.score;
+
+      row.appendChild(place);
+      row.appendChild(name);
+      row.appendChild(score);
+      container.appendChild(row);
     });
   }
 

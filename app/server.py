@@ -253,6 +253,53 @@ def advance_game():
                 game_state["phase"] = "final"
 
 
+def compute_ranks(sorted_players):
+    """Считает места по очкам с учётом ничьих: у игроков с одинаковым
+    счётом — одно и то же место, а следующее место пропускается
+    (как в спорте: 1, 1, 3), а не выдумывается победитель наугад."""
+    ranks = []
+    previous_score = None
+    previous_rank = 0
+    for index, player in enumerate(sorted_players):
+        if player["score"] != previous_score:
+            rank = index + 1
+        else:
+            rank = previous_rank
+        ranks.append(rank)
+        previous_rank = rank
+        previous_score = player["score"]
+    return ranks
+
+
+def handle_restart(payload):
+    """Обрабатывает «Сыграть ещё раз» на телефоне ведущего.
+
+    Работает только в фазе "final" и только для первого зашедшего
+    игрока. Обнуляет очки и возвращает игру в лобби — сами игроки
+    остаются, заново вводить имена не нужно. Слова на новую партию
+    выбираются заново, когда ведущий снова нажмёт «Начать игру».
+    """
+    player_id = payload.get("id")
+
+    if game_state["phase"] != "final":
+        return {"ok": False, "error": "Сыграть ещё раз можно только после игры"}
+
+    if not game_state["players"] or game_state["players"][0]["id"] != player_id:
+        return {"ok": False, "error": "Начать новую игру может только ведущий"}
+
+    for player in game_state["players"]:
+        player["score"] = 0
+
+    game_state["phase"] = "lobby"
+    game_state["stage"] = None
+    game_state["words"] = []
+    game_state["word_index"] = 0
+    game_state["answers"] = {}
+    game_state["all_answered_time"] = None
+    game_state["scored_this_word"] = False
+    return {"ok": True}
+
+
 def get_local_ip():
     """Узнаёт адрес ноутбука в домашней Wi-Fi сети.
 
@@ -359,19 +406,21 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                     my_correct = is_answer_correct(current_word, game_state["answers"].get(player_id))
 
             # Таблица очков — от лидера к последнему. При равном счёте
-            # порядок как в списке игроков (кто зашёл раньше).
+            # порядок как в списке игроков (кто зашёл раньше), а место
+            # (rank) у них одинаковое — это честная ничья, а не выдумка.
             sorted_players = sorted(game_state["players"], key=lambda p: -p["score"])
+            ranks = compute_ranks(sorted_players)
             scoreboard = [
-                {"name": player["name"], "score": player["score"]}
-                for player in sorted_players
+                {"name": player["name"], "score": player["score"], "rank": rank}
+                for player, rank in zip(sorted_players, ranks)
             ]
 
             my_score = None
             my_rank = None
-            for index, player in enumerate(sorted_players):
+            for player, rank in zip(sorted_players, ranks):
                 if player["id"] == player_id:
                     my_score = player["score"]
-                    my_rank = index + 1
+                    my_rank = rank
                     break
 
             my_points = None
@@ -444,6 +493,16 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 payload = {}
             self.send_json(handle_answer(payload))
+            return
+
+        if path == "/api/restart":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw_body = self.rfile.read(length) if length else b"{}"
+            try:
+                payload = json.loads(raw_body.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                payload = {}
+            self.send_json(handle_restart(payload))
             return
 
         self.send_error(404, "Not found")
