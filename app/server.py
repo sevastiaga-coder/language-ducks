@@ -61,6 +61,8 @@ POINTS_CORRECT = 100
 # scored_this_word — очки за текущее слово уже начислены игрокам (True)
 # или ещё нет (False). Не даёт начислить очки дважды за одно слово,
 # пока сервер ждёт NEXT_WORD_DELAY_SECONDS перед следующим словом.
+# previous_words — слова прошлой партии (той, что только что закончилась).
+# Нужны, чтобы при выборе слов новой партии не брать те же самые.
 game_state = {
     "players": [],
     "phase": "lobby",
@@ -70,6 +72,7 @@ game_state = {
     "answers": {},
     "all_answered_time": None,
     "scored_this_word": False,
+    "previous_words": [],
 }
 
 # Защищает переход к следующему слову от гонки: экран и несколько
@@ -155,18 +158,25 @@ def handle_join(payload):
     return {"ok": True, "id": new_player["id"], "name": new_player["name"]}
 
 
-def pick_round_words():
+def pick_round_words(previous_words):
     """Выбирает 5 слов на партию: по одному случайному слову с каждого
     из 5 языков. Так слова в партии точно из разных языков, а заодно
     не может попасться два слова с одинаковым правильным переводом.
+
+    previous_words — слова прошлой партии. У каждого языка ровно 4 слова,
+    одно из них было в прошлый раз — выбираем из оставшихся трёх, чтобы
+    партии не повторялись. Если после этого выбирать не из чего (слов
+    в языке мало), просто берём из всех слов языка — без ошибок.
     """
     languages = sorted({w["language"] for w in WORDS})
+    previous_texts = {w["word"] for w in previous_words}
     chosen = []
     used_answers = set()
     for language in languages:
         candidates = [w for w in WORDS
                       if w["language"] == language and w["answer"] not in used_answers]
-        word = random.choice(candidates)
+        fresh_candidates = [w for w in candidates if w["word"] not in previous_texts]
+        word = random.choice(fresh_candidates or candidates)
         chosen.append(word)
         used_answers.add(word["answer"])
     random.shuffle(chosen)
@@ -192,7 +202,7 @@ def handle_start(payload):
 
     game_state["phase"] = "playing"
     game_state["stage"] = "translate"
-    game_state["words"] = pick_round_words()
+    game_state["words"] = pick_round_words(game_state["previous_words"])
     game_state["word_index"] = 0
     game_state["answers"] = {}
     game_state["all_answered_time"] = None
@@ -307,6 +317,10 @@ def handle_restart(payload):
 
     for player in game_state["players"]:
         player["score"] = 0
+
+    # Запоминаем слова только что законченной партии — pick_round_words
+    # использует их, чтобы не повторить в новой партии.
+    game_state["previous_words"] = game_state["words"]
 
     game_state["phase"] = "lobby"
     game_state["stage"] = None

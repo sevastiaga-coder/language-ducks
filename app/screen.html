@@ -44,7 +44,7 @@
         <div class="scoreboard" id="scoreboard"></div>
       </div>
     </div>
-    <div class="next-word-note">Следующее слово через несколько секунд</div>
+    <div class="next-word-note" id="next-word-note">Следующее слово через несколько секунд</div>
   </div>
 
   <div class="final-panel" id="final-panel" hidden>
@@ -190,6 +190,12 @@
     revealWordEl.classList.toggle("cyr", isCyrillic(info.word));
     document.getElementById("reveal-language").textContent = info.wordLanguage || "";
     document.getElementById("reveal-correct-answer").textContent = info.correctAnswer || "";
+
+    // На последнем слове партии следующего слова не будет — вместо
+    // подписи про него показываем честную «Считаем итоги».
+    const isLastWord = info.wordIndex >= info.wordTotal;
+    document.getElementById("next-word-note").textContent =
+      isLastWord ? "Считаем итоги" : "Следующее слово через несколько секунд";
 
     // Пересоздаём карточки и таблицу очков только когда слово или сами
     // ответы реально изменились — иначе анимация появления
