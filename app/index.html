@@ -216,6 +216,15 @@
     }
   }
 
+  function renderIntermissionView(info) {
+    hideAllViews();
+    waitingView.hidden = false;
+    waitingStatus.textContent = "Смотри на большой экран";
+    waitingSubstatus.textContent = "Начинается новый этап";
+    hostControls.hidden = true;
+    guestNote.hidden = true;
+  }
+
   function renderLobby(info) {
     hideAllViews();
     waitingView.hidden = false;
@@ -386,7 +395,9 @@
       return;
     }
     if (info.phase === "playing") {
-      if (info.stage === "trick" && info.trickRevealed) {
+      if (info.stage === "intermission") {
+        renderIntermissionView(info);
+      } else if (info.stage === "trick" && info.trickRevealed) {
         renderTrickResultView(info);
       } else if (info.stage === "trick" && info.trickStage === "voting") {
         if (info.myVoted) {

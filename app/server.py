@@ -32,15 +32,13 @@ MIN_PLAYERS = 2
 MAX_NAME_LENGTH = 12
 WORDS_PER_ROUND = 5
 TRICK_WORDS_PER_ROUND = 3
-# ВРЕМЕННО (выпуск 2, часть 9): пока этапы «Перевод» и «Обманка» не
-# склеены в одну игру (часть 12), партия сразу начинается с «Обманки» —
-# так её можно проверить отдельно, не проходя сперва «Перевод». Когда
-# часть 12 будет готова, эту строку нужно убрать (или поставить False) —
-# и игра пойдёт по обычному порядку: «Перевод» → «Обманка» → финал.
-FIRST_STAGE_IS_TRICK = True
 # Сколько секунд ждём после последнего ответа, прежде чем показать
 # результаты — чтобы последний игрок успел убрать палец от экрана.
 REVEAL_DELAY_SECONDS = 2.0
+# Сколько секунд держим заставку между этапами («Этап 2. Обманка») на
+# экране ноутбука, прежде чем сама включится первое слово «Обманки» —
+# чтобы за столом успели понять, что правила игры поменялись.
+INTERMISSION_SECONDS = 6.0
 # Сколько секунд держим показ ответов, прежде чем перейти к следующему
 # слову — чтобы за столом успели посмотреть и обсудить.
 NEXT_WORD_DELAY_SECONDS = 9.0
@@ -60,8 +58,12 @@ POINTS_TRICK_FOOLED = 100
 # phase — в какой фазе сейчас игра: "lobby" (собираем игроков),
 # "playing" (игра идёт), "final" (финал). Следующие части будут
 # показывать разное в зависимости от этого поля.
-# stage — какой этап игры сейчас идёт: "translate" (этап «Перевод») или
-# "trick" (этап «Обманка»).
+# stage — какой этап игры сейчас идёт: "translate" (этап «Перевод»),
+# "intermission" (заставка между этапами) или "trick" (этап «Обманка»).
+# intermission_time — момент (time.time()), когда началась заставка
+# между этапами. None, пока заставка не показывается. Нужен, чтобы
+# продержать её на экране ровно INTERMISSION_SECONDS и потом самой
+# переключить игру на первое слово «Обманки».
 # words — слова, выбранные на этап «Перевод» (5 штук, случайно из
 # words.py), в порядке, в котором их показывают.
 # word_index — индекс текущего слова в words (0 — первое слово).
@@ -109,6 +111,7 @@ game_state = {
     "players": [],
     "phase": "lobby",
     "stage": None,
+    "intermission_time": None,
     "words": [],
     "word_index": 0,
     "answers": {},
@@ -284,7 +287,9 @@ def handle_start(payload):
         return {"ok": False, "error": "Нужен хотя бы ещё один игрок"}
 
     game_state["phase"] = "playing"
-    game_state["words"] = []
+    game_state["stage"] = "translate"
+    game_state["intermission_time"] = None
+    game_state["words"] = pick_round_words(game_state["previous_words"])
     game_state["word_index"] = 0
     game_state["answers"] = {}
     game_state["all_answered_time"] = None
@@ -299,16 +304,6 @@ def handle_start(payload):
     game_state["votes"] = {}
     game_state["votes_all_time"] = None
     game_state["trick_scored_this_word"] = False
-
-    # FIRST_STAGE_IS_TRICK — временный переключатель на время выпуска 2
-    # (см. константу наверху файла): пока «Перевод» и «Обманка» не
-    # склеены в одну игру, партия начинается сразу с той, что включена.
-    if FIRST_STAGE_IS_TRICK:
-        game_state["stage"] = "trick"
-        game_state["trick_words"] = pick_trick_words(game_state["previous_trick_words"])
-    else:
-        game_state["stage"] = "translate"
-        game_state["words"] = pick_round_words(game_state["previous_words"])
     return {"ok": True}
 
 
@@ -455,6 +450,8 @@ def advance_game():
             return
         if game_state["stage"] == "translate":
             advance_translate()
+        elif game_state["stage"] == "intermission":
+            advance_intermission()
         elif game_state["stage"] == "trick":
             advance_trick()
 
@@ -488,7 +485,24 @@ def advance_translate():
             game_state["all_answered_time"] = None
             game_state["scored_this_word"] = False
         else:
-            game_state["phase"] = "final"
+            # «Перевод» закончился — не сразу «Обманка»: сначала
+            # заставка (часть 12), чтобы за столом успели заметить, что
+            # правила меняются. Слова «Обманки» выбираем уже сейчас,
+            # чтобы они были готовы, как только заставка закончится.
+            game_state["stage"] = "intermission"
+            game_state["intermission_time"] = time.time()
+            game_state["trick_words"] = pick_trick_words(game_state["previous_trick_words"])
+
+
+def advance_intermission():
+    """Держит заставку между этапами на экране ровно
+    INTERMISSION_SECONDS, потом сама переключает игру на первое слово
+    «Обманки» (слова уже выбраны заранее, в advance_translate)."""
+    if game_state["intermission_time"] is None:
+        return
+    if time.time() - game_state["intermission_time"] >= INTERMISSION_SECONDS:
+        game_state["stage"] = "trick"
+        game_state["intermission_time"] = None
 
 
 def advance_trick():
@@ -624,6 +638,7 @@ def handle_restart(payload):
 
     game_state["phase"] = "lobby"
     game_state["stage"] = None
+    game_state["intermission_time"] = None
     game_state["words"] = []
     game_state["word_index"] = 0
     game_state["answers"] = {}

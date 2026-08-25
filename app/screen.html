@@ -32,6 +32,12 @@
     <div class="all-answered-note" id="all-answered-note" hidden>Все ответили!</div>
   </div>
 
+  <div class="final-panel" id="intermission-panel" hidden>
+    <div class="winner-label">ЭТАП 2</div>
+    <div class="word cyr">ОБМАНКА</div>
+    <div class="stage-hint">Придумай, что значит слово, и обмани остальных</div>
+  </div>
+
   <div class="playing-panel" id="fib-panel" hidden>
     <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
     <div class="stage-hint">Придумай перевод, чтобы все поверили</div>
@@ -136,6 +142,7 @@
       const joinPanel = document.querySelector(".join-panel");
       const playersPanel = document.getElementById("players-panel");
       const playingPanel = document.getElementById("playing-panel");
+      const intermissionPanel = document.getElementById("intermission-panel");
       const fibPanel = document.getElementById("fib-panel");
       const votePanel = document.getElementById("vote-panel");
       const revealPanel = document.getElementById("reveal-panel");
@@ -152,6 +159,7 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
+        intermissionPanel.hidden = true;
         fibPanel.hidden = true;
         votePanel.hidden = true;
         revealPanel.hidden = true;
@@ -165,6 +173,7 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
+        intermissionPanel.hidden = true;
         fibPanel.hidden = true;
         votePanel.hidden = true;
         revealPanel.hidden = false;
@@ -174,10 +183,24 @@
         return;
       }
 
+      if (info.phase === "playing" && info.stage === "intermission") {
+        joinPanel.hidden = true;
+        playersPanel.hidden = true;
+        playingPanel.hidden = true;
+        intermissionPanel.hidden = false;
+        fibPanel.hidden = true;
+        votePanel.hidden = true;
+        revealPanel.hidden = true;
+        trickRevealPanel.hidden = true;
+        finalPanel.hidden = true;
+        return;
+      }
+
       if (info.phase === "playing" && info.stage === "trick" && info.trickRevealed) {
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
+        intermissionPanel.hidden = true;
         fibPanel.hidden = true;
         votePanel.hidden = true;
         revealPanel.hidden = true;
@@ -191,6 +214,7 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
+        intermissionPanel.hidden = true;
         fibPanel.hidden = true;
         votePanel.hidden = false;
         revealPanel.hidden = true;
@@ -204,6 +228,7 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
+        intermissionPanel.hidden = true;
         fibPanel.hidden = false;
         votePanel.hidden = true;
         revealPanel.hidden = true;
@@ -217,6 +242,7 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = false;
+        intermissionPanel.hidden = true;
         fibPanel.hidden = true;
         votePanel.hidden = true;
         revealPanel.hidden = true;
@@ -229,6 +255,7 @@
       joinPanel.hidden = false;
       playersPanel.hidden = false;
       playingPanel.hidden = true;
+      intermissionPanel.hidden = true;
       fibPanel.hidden = true;
       votePanel.hidden = true;
       revealPanel.hidden = true;
