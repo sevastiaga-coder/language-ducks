@@ -510,10 +510,18 @@ class GameRequestHandler(BaseHTTPRequestHandler):
 
 def main():
     server = ThreadingHTTPServer(("0.0.0.0", PORT), GameRequestHandler)
-    print("Language Ducks запущен!")
-    print("Экран ноутбука: http://localhost:{}/screen.html".format(PORT))
-    print("Адрес для телефонов: http://{}:{}".format(LOCAL_IP, PORT))
-    print("Чтобы остановить — нажми Ctrl+C")
+    print()
+    print("=" * 45)
+    print("   ИГРА ЗАПУЩЕНА!")
+    print("=" * 45)
+    print()
+    print("   Адрес для телефонов друзей (тот же Wi-Fi):")
+    print()
+    print("   >>>  {}:{}  <<<".format(LOCAL_IP, PORT))
+    print()
+    print("   Чтобы закончить игру — просто закрой это окно.")
+    print("=" * 45)
+    print()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
