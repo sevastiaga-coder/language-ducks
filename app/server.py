@@ -48,7 +48,7 @@ NEXT_WORD_DELAY_SECONDS = 9.0
 POINTS_CORRECT = 100
 # Очки за «Обманку» (решение босса): столько получает тот, кто нашёл
 # настоящий перевод...
-POINTS_TRICK_GUESS = 200
+POINTS_TRICK_GUESS = 150
 # ...и столько получает автор выдумки — за каждого, кто на неё попался.
 POINTS_TRICK_FOOLED = 100
 
@@ -147,6 +147,18 @@ def is_answer_correct(word, answer_text):
     candidates = [word["answer"]] + word.get("alternatives", [])
     normalized_candidates = {normalize_answer(candidate) for candidate in candidates}
     return normalize_answer(answer_text) in normalized_candidates
+
+
+def capitalize_for_display(text):
+    """Первая буква заглавная, остальное как есть — только для показа
+    на экране голосования и в итогах «Обманки». Телефоны сами делают
+    первую букву заглавной, когда игрок печатает придумку, а настоящий
+    перевод в words.py записан с маленькой — без этого правда была бы
+    видна по одному написанию. Сравнение ответов эту функцию не
+    использует, только normalize_answer выше."""
+    if not text:
+        return text
+    return text[0].upper() + text[1:]
 
 
 def handle_join(payload):
@@ -782,7 +794,9 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             # мог погасить свою кнопку, не выдавая чужие.
             trick_stage = game_state["trick_stage"] if stage == "trick" else None
             voting = trick_stage == "voting"
-            vote_options = game_state["vote_options"] if voting else []
+            vote_options = [
+                capitalize_for_display(text) for text in game_state["vote_options"]
+            ] if voting else []
             my_vote_option_index = -1
             if voting and player_id and player_id in game_state["vote_owners"]:
                 my_vote_option_index = game_state["vote_owners"].index(player_id)
@@ -814,7 +828,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             my_fooled_points = 0
             trick_correct_answer = None
             if trick_revealed:
-                trick_correct_answer = current_word["answer"]
+                trick_correct_answer = capitalize_for_display(current_word["answer"])
                 id_to_name = {player["id"]: player["name"] for player in game_state["players"]}
                 real_index = game_state["vote_owners"].index(None)
                 for index, (text, owner_id) in enumerate(
@@ -827,7 +841,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                     ]
                     trick_results.append({
                         "number": index + 1,
-                        "text": text,
+                        "text": capitalize_for_display(text),
                         "isReal": is_real,
                         "authorName": None if is_real else id_to_name.get(owner_id),
                         "voterNames": voter_names,
