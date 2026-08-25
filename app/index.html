@@ -115,6 +115,10 @@
 
   let myPlayerId = null;
   let pollTimer = null;
+  // Опрашивает сервер, пока показан экран «Игра уже идёт» — если
+  // ведущий начнёт новую партию, лобби откроется само, без ручного
+  // обновления страницы.
+  let closedPollTimer = null;
   // Помогает понять, что вопрос реально сменился, и только тогда
   // очистить поле ввода — иначе каждый опрос стирал бы то, что
   // игрок сейчас печатает.
@@ -130,6 +134,10 @@
   }
 
   function showJoinForm() {
+    if (closedPollTimer) {
+      clearInterval(closedPollTimer);
+      closedPollTimer = null;
+    }
     hideAllViews();
     joinView.hidden = false;
   }
@@ -137,6 +145,18 @@
   function showClosed() {
     hideAllViews();
     closedView.hidden = false;
+    if (!closedPollTimer) {
+      closedPollTimer = setInterval(async () => {
+        try {
+          const info = await fetchGameInfo();
+          if (info.phase === "lobby") {
+            showJoinForm();
+          }
+        } catch (error) {
+          // Сервер на секунду недоступен — просто попробуем ещё раз через секунду.
+        }
+      }, 1000);
+    }
   }
 
   function renderLobby(info) {
