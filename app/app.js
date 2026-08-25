@@ -27,3 +27,13 @@ async function startGame(playerId) {
   });
   return response.json();
 }
+
+// Игрок отправляет ответ на текущее слово.
+async function sendAnswer(playerId, answer) {
+  const response = await fetch("/api/answer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: playerId, answer: answer }),
+  });
+  return response.json();
+}

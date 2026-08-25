@@ -33,6 +33,23 @@
 
     <div id="guest-note" class="guest-note" hidden>Игру начнёт тот, кто зашёл первым</div>
   </div>
+
+  <div id="answer-view" class="answer-view" hidden>
+    <div class="waiting-name">Ты играешь как <span id="answer-player-name"></span></div>
+    <div class="question-number" id="answer-question-number"></div>
+    <div class="task-line">Переведи: <span id="task-word" class="task-word"></span></div>
+    <input id="answer-input" class="name-input" type="text" maxlength="40" autocomplete="off" placeholder="Твой перевод">
+    <button id="answer-btn" class="primary-btn" disabled>ОТВЕТИТЬ</button>
+    <div class="answered-count" id="phone-answered-count"></div>
+  </div>
+
+  <div id="submitted-view" class="waiting-view" hidden>
+    <div class="waiting-name">Ты играешь как <span id="submitted-player-name"></span></div>
+    <div class="submitted-check">✓</div>
+    <div class="waiting-text">Ответ принят, жди остальных</div>
+    <div class="submitted-answer" id="submitted-answer-text"></div>
+    <div class="answered-count" id="submitted-answered-count"></div>
+  </div>
 </div>
 
 <script src="app.js"></script>
@@ -43,6 +60,8 @@
   const joinView = document.getElementById("join-view");
   const closedView = document.getElementById("closed-view");
   const waitingView = document.getElementById("waiting-view");
+  const answerView = document.getElementById("answer-view");
+  const submittedView = document.getElementById("submitted-view");
   const playerNameLabel = document.getElementById("player-name-label");
   const waitingStatus = document.getElementById("waiting-status");
   const hostControls = document.getElementById("host-controls");
@@ -50,37 +69,45 @@
   const startHint = document.getElementById("start-hint");
   const guestNote = document.getElementById("guest-note");
 
+  const answerPlayerName = document.getElementById("answer-player-name");
+  const answerQuestionNumber = document.getElementById("answer-question-number");
+  const taskWord = document.getElementById("task-word");
+  const answerInput = document.getElementById("answer-input");
+  const answerBtn = document.getElementById("answer-btn");
+  const phoneAnsweredCount = document.getElementById("phone-answered-count");
+
+  const submittedPlayerName = document.getElementById("submitted-player-name");
+  const submittedAnswerText = document.getElementById("submitted-answer-text");
+  const submittedAnsweredCount = document.getElementById("submitted-answered-count");
+
   let myPlayerId = null;
   let pollTimer = null;
+  // Помогает понять, что вопрос реально сменился, и только тогда
+  // очистить поле ввода — иначе каждый опрос стирал бы то, что
+  // игрок сейчас печатает.
+  let currentWordIndex = null;
 
-  function showJoinForm() {
-    joinView.hidden = false;
+  function hideAllViews() {
+    joinView.hidden = true;
     closedView.hidden = true;
     waitingView.hidden = true;
+    answerView.hidden = true;
+    submittedView.hidden = true;
+  }
+
+  function showJoinForm() {
+    hideAllViews();
+    joinView.hidden = false;
   }
 
   function showClosed() {
-    joinView.hidden = true;
+    hideAllViews();
     closedView.hidden = false;
-    waitingView.hidden = true;
   }
 
-  function showWaiting(name) {
-    playerNameLabel.textContent = name;
-    joinView.hidden = true;
-    closedView.hidden = true;
+  function renderLobby(info) {
+    hideAllViews();
     waitingView.hidden = false;
-    startPolling();
-  }
-
-  // Показывает, что сейчас происходит: ждём хода хозяина, или игра уже пошла.
-  function renderWaitingState(info) {
-    if (info.phase === "playing") {
-      waitingStatus.textContent = "Жди задание";
-      hostControls.hidden = true;
-      guestNote.hidden = true;
-      return;
-    }
     waitingStatus.textContent = "Смотри на большой экран";
     if (info.isHost) {
       hostControls.hidden = false;
@@ -93,6 +120,41 @@
     }
   }
 
+  function renderAnswerView(info) {
+    hideAllViews();
+    answerView.hidden = false;
+    answerQuestionNumber.textContent = "Слово " + info.wordIndex + " из " + info.wordTotal;
+    taskWord.textContent = info.word || "";
+
+    if (currentWordIndex !== info.wordIndex) {
+      currentWordIndex = info.wordIndex;
+      answerInput.value = "";
+      answerBtn.disabled = true;
+    }
+    phoneAnsweredCount.textContent = "Ответили " + info.answeredCount + " из " + info.playerCount;
+  }
+
+  function renderSubmittedView(info) {
+    hideAllViews();
+    submittedView.hidden = false;
+    submittedAnswerText.textContent = info.myAnswerText || "";
+    submittedAnsweredCount.textContent = "Ответили " + info.answeredCount + " из " + info.playerCount;
+  }
+
+  // Решает, какой экран телефона показать прямо сейчас, по свежим
+  // данным с сервера.
+  function renderPhase(info) {
+    if (info.phase === "playing") {
+      if (info.myAnswered) {
+        renderSubmittedView(info);
+      } else {
+        renderAnswerView(info);
+      }
+    } else {
+      renderLobby(info);
+    }
+  }
+
   function startPolling() {
     if (pollTimer) {
       return;
@@ -100,11 +162,18 @@
     pollTimer = setInterval(async () => {
       try {
         const info = await fetchGameInfo(myPlayerId);
-        renderWaitingState(info);
+        renderPhase(info);
       } catch (error) {
         // Сервер на секунду недоступен — просто попробуем ещё раз через секунду.
       }
     }, 1000);
+  }
+
+  function enterGame(name) {
+    playerNameLabel.textContent = name;
+    answerPlayerName.textContent = name;
+    submittedPlayerName.textContent = name;
+    startPolling();
   }
 
   nameInput.addEventListener("input", () => {
@@ -124,9 +193,9 @@
       myPlayerId = result.id;
       sessionStorage.setItem("playerId", result.id);
       sessionStorage.setItem("playerName", result.name);
+      enterGame(result.name);
       const info = await fetchGameInfo(myPlayerId);
-      showWaiting(result.name);
-      renderWaitingState(info);
+      renderPhase(info);
     } else {
       joinHint.textContent = result.error;
       joinBtn.disabled = false;
@@ -149,15 +218,41 @@
     }
   });
 
+  answerInput.addEventListener("input", () => {
+    answerBtn.disabled = answerInput.value.trim().length === 0;
+  });
+
+  async function submitAnswer() {
+    const answer = answerInput.value.trim();
+    if (!answer) {
+      return;
+    }
+    answerBtn.disabled = true;
+    const result = await sendAnswer(myPlayerId, answer);
+    if (result.ok) {
+      const info = await fetchGameInfo(myPlayerId);
+      renderPhase(info);
+    } else {
+      answerBtn.disabled = false;
+    }
+  }
+
+  answerBtn.addEventListener("click", submitAnswer);
+  answerInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !answerBtn.disabled) {
+      submitAnswer();
+    }
+  });
+
   async function init() {
     const savedId = sessionStorage.getItem("playerId");
     if (savedId) {
       const result = await joinGame({ id: savedId });
       if (result.ok) {
         myPlayerId = savedId;
+        enterGame(result.name);
         const info = await fetchGameInfo(myPlayerId);
-        showWaiting(result.name);
-        renderWaitingState(info);
+        renderPhase(info);
         return;
       }
       sessionStorage.removeItem("playerId");

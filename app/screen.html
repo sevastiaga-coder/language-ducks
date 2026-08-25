@@ -23,7 +23,13 @@
   </div>
 
   <div class="playing-panel" id="playing-panel" hidden>
-    <div class="playing-announcement">ИГРА НАЧАЛАСЬ</div>
+    <div class="stage-badge">ЭТАП 1 · ПЕРЕВОД</div>
+    <div class="question-number" id="question-number"></div>
+    <div class="word" id="word-text"></div>
+    <div class="word-language" id="word-language"></div>
+    <div class="answered-list" id="answered-list"></div>
+    <div class="answered-count" id="answered-count"></div>
+    <div class="all-answered-note" id="all-answered-note" hidden>Все ответили!</div>
   </div>
 </div>
 
@@ -60,6 +66,7 @@
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = false;
+        renderWord(info);
         return;
       }
 
@@ -73,6 +80,27 @@
     } catch (error) {
       document.getElementById("join-address").textContent = "нет связи с сервером";
     }
+  }
+
+  function renderWord(info) {
+    document.getElementById("question-number").textContent =
+      "Слово " + info.wordIndex + " из " + info.wordTotal;
+    document.getElementById("word-text").textContent = info.word || "";
+    document.getElementById("word-language").textContent = info.wordLanguage || "";
+
+    const answeredList = document.getElementById("answered-list");
+    answeredList.innerHTML = "";
+    info.players.forEach((name) => {
+      const item = document.createElement("div");
+      const answered = info.answeredNames.includes(name);
+      item.className = "answered-name" + (answered ? " answered" : "");
+      item.textContent = (answered ? "✓ " : "") + name;
+      answeredList.appendChild(item);
+    });
+
+    document.getElementById("answered-count").textContent =
+      "Ответили " + info.answeredCount + " из " + info.players.length;
+    document.getElementById("all-answered-note").hidden = !info.allAnswered;
   }
 
   renderPlayers([]);

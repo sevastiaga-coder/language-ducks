@@ -14,17 +14,21 @@ Language Ducks — маленький сервер для игры.
 """
 
 import json
+import random
 import socket
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from words import WORDS
+
 PORT = 8000
 APP_DIR = Path(__file__).resolve().parent
 MAX_PLAYERS = 10
 MIN_PLAYERS = 2
 MAX_NAME_LENGTH = 12
+WORDS_PER_ROUND = 5
 
 # Состояние игры целиком живёт здесь, в памяти сервера.
 # Дальше, в следующих частях, сюда добавятся вопросы, очки и т.д.
@@ -34,9 +38,20 @@ MAX_NAME_LENGTH = 12
 # phase — в какой фазе сейчас игра: "lobby" (собираем игроков),
 # "playing" (игра идёт), "final" (финал). Следующие части будут
 # показывать разное в зависимости от этого поля.
+# stage — какой этап игры сейчас идёт: пока только "translate" (этап
+# «Перевод»). Появится позже, когда добавится этап «Обманка».
+# words — слова, выбранные на этот этап игры (5 штук, случайно из
+# words.py), в порядке, в котором их показывают.
+# word_index — индекс текущего слова в words (0 — первое слово).
+# answers — ответы игроков на текущее слово: id игрока -> его ответ.
+# Очищается, когда игра переходит к следующему слову.
 game_state = {
     "players": [],
     "phase": "lobby",
+    "stage": None,
+    "words": [],
+    "word_index": 0,
+    "answers": {},
 }
 
 
@@ -120,6 +135,41 @@ def handle_start(payload):
         return {"ok": False, "error": "Нужен хотя бы ещё один игрок"}
 
     game_state["phase"] = "playing"
+    game_state["stage"] = "translate"
+    game_state["words"] = random.sample(WORDS, WORDS_PER_ROUND)
+    game_state["word_index"] = 0
+    game_state["answers"] = {}
+    return {"ok": True}
+
+
+def handle_answer(payload):
+    """Обрабатывает ответ игрока на текущее слово этапа «Перевод».
+
+    Каждый игрок отвечает на одно слово только один раз: если ответ
+    уже сохранён, второй присланный ответ просто игнорируем — первый
+    остаётся в силе, чтобы никто не мог подсмотреть чужие ответы и
+    переписать свой.
+    """
+    player_id = payload.get("id")
+    answer_text = (payload.get("answer") or "").strip()
+
+    if game_state["phase"] != "playing":
+        return {"ok": False, "error": "Сейчас не время отвечать"}
+
+    player = None
+    for candidate in game_state["players"]:
+        if candidate["id"] == player_id:
+            player = candidate
+            break
+    if not player:
+        return {"ok": False, "error": "Игрок не найден"}
+
+    if not answer_text:
+        return {"ok": False, "error": "Ответ пустой"}
+
+    if player_id not in game_state["answers"]:
+        game_state["answers"][player_id] = answer_text
+
     return {"ok": True}
 
 
@@ -192,12 +242,33 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 and game_state["players"]
                 and game_state["players"][0]["id"] == player_id
             )
+
+            current_word = None
+            if game_state["phase"] == "playing" and game_state["words"]:
+                current_word = game_state["words"][game_state["word_index"]]
+
+            answered_names = [
+                player["name"] for player in game_state["players"]
+                if player["id"] in game_state["answers"]
+            ]
+
             self.send_json({
                 "address": "{}:{}".format(LOCAL_IP, PORT),
                 "playerCount": len(game_state["players"]),
                 "players": [player["name"] for player in game_state["players"]],
                 "phase": game_state["phase"],
                 "isHost": is_host,
+                "stage": game_state["stage"],
+                "wordIndex": game_state["word_index"] + 1 if current_word else 0,
+                "wordTotal": len(game_state["words"]),
+                "word": current_word["word"] if current_word else None,
+                "wordLanguage": current_word["language"] if current_word else None,
+                "answeredNames": answered_names,
+                "answeredCount": len(game_state["answers"]),
+                "allAnswered": bool(game_state["players"])
+                and len(game_state["answers"]) >= len(game_state["players"]),
+                "myAnswered": bool(player_id) and player_id in game_state["answers"],
+                "myAnswerText": game_state["answers"].get(player_id) if player_id else None,
             })
             return
 
@@ -229,6 +300,16 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 payload = {}
             self.send_json(handle_start(payload))
+            return
+
+        if path == "/api/answer":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw_body = self.rfile.read(length) if length else b"{}"
+            try:
+                payload = json.loads(raw_body.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                payload = {}
+            self.send_json(handle_answer(payload))
             return
 
         self.send_error(404, "Not found")
