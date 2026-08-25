@@ -35,6 +35,7 @@
   <div class="reveal-panel" id="reveal-panel" hidden>
     <div class="reveal-header">
       <div class="reveal-word" id="reveal-word"></div>
+      <div class="word-language" id="reveal-language"></div>
       <div class="reveal-correct">Правильный перевод: <span id="reveal-correct-answer"></span></div>
     </div>
     <div class="reveal-cards" id="reveal-cards"></div>
@@ -45,8 +46,19 @@
 <script>
   const MAX_PLAYERS = 10;
   let previousNames = new Set();
+  // Запоминаем, что уже нарисовано на экране, чтобы не пересоздавать
+  // те же самые карточки заново каждую секунду — из-за этого они мигали.
+  let lastPlayersKey = null;
+  let lastAnsweredKey = null;
+  let lastRevealKey = null;
 
   function renderPlayers(names) {
+    const key = names.join("|");
+    if (key === lastPlayersKey) {
+      return;
+    }
+    lastPlayersKey = key;
+
     const grid = document.getElementById("players-grid");
     grid.innerHTML = "";
     for (let i = 0; i < MAX_PLAYERS; i++) {
@@ -108,15 +120,20 @@
     document.getElementById("word-text").textContent = info.word || "";
     document.getElementById("word-language").textContent = info.wordLanguage || "";
 
-    const answeredList = document.getElementById("answered-list");
-    answeredList.innerHTML = "";
-    info.players.forEach((name) => {
-      const item = document.createElement("div");
-      const answered = info.answeredNames.includes(name);
-      item.className = "answered-name" + (answered ? " answered" : "");
-      item.textContent = (answered ? "✓ " : "") + name;
-      answeredList.appendChild(item);
-    });
+    const answeredKey = info.wordIndex + "|" + info.players.join(",") + "|" +
+      info.answeredNames.slice().sort().join(",");
+    if (answeredKey !== lastAnsweredKey) {
+      lastAnsweredKey = answeredKey;
+      const answeredList = document.getElementById("answered-list");
+      answeredList.innerHTML = "";
+      info.players.forEach((name) => {
+        const item = document.createElement("div");
+        const answered = info.answeredNames.includes(name);
+        item.className = "answered-name" + (answered ? " answered" : "");
+        item.textContent = (answered ? "✓ " : "") + name;
+        answeredList.appendChild(item);
+      });
+    }
 
     document.getElementById("answered-count").textContent =
       "Ответили " + info.answeredCount + " из " + info.players.length;
@@ -125,7 +142,17 @@
 
   function renderReveal(info) {
     document.getElementById("reveal-word").textContent = info.word || "";
+    document.getElementById("reveal-language").textContent = info.wordLanguage || "";
     document.getElementById("reveal-correct-answer").textContent = info.correctAnswer || "";
+
+    // Пересоздаём карточки только когда слово или сами ответы реально
+    // изменились — иначе анимация появления перезапускалась бы каждую
+    // секунду опроса сервера, и карточки мигали.
+    const revealKey = info.word + "|" + JSON.stringify(info.results);
+    if (revealKey === lastRevealKey) {
+      return;
+    }
+    lastRevealKey = revealKey;
 
     const cardsContainer = document.getElementById("reveal-cards");
     cardsContainer.innerHTML = "";

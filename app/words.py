@@ -9,8 +9,9 @@ Language Ducks — слова для этапа «Перевод».
                    верными (например «бабочка» и «мотылёк»)
 
 Проверка ответа игрока с этим списком будет в следующей части —
-здесь только сами слова. По 4 слова на язык, от простых до неочевидных,
-чтобы было интересно и школьнику, и взрослому за столом.
+здесь только сами слова. По 4 слова на язык. Большинство слов —
+узнаваемые, где можно угадать по созвучию или по школьным знаниям;
+на каждый язык есть одно слово посложнее, но всё равно отгадываемое.
 """
 
 WORDS = [
@@ -21,28 +22,28 @@ WORDS = [
      "alternatives": []},
     {"word": "butterfly", "language": "английский", "answer": "бабочка",
      "alternatives": ["мотылёк"]},
-    {"word": "serendipity", "language": "английский", "answer": "счастливая случайность",
-     "alternatives": ["удачное совпадение", "приятная неожиданность"]},
+    {"word": "shadow", "language": "английский", "answer": "тень",
+     "alternatives": []},
 
     # Немецкий
     {"word": "die Katze", "language": "немецкий", "answer": "кошка",
      "alternatives": ["кот"]},
     {"word": "der Spiegel", "language": "немецкий", "answer": "зеркало",
      "alternatives": []},
+    {"word": "der Apfel", "language": "немецкий", "answer": "яблоко",
+     "alternatives": []},
     {"word": "der Schmetterling", "language": "немецкий", "answer": "бабочка",
      "alternatives": ["мотылёк"]},
-    {"word": "der Kummerspeck", "language": "немецкий", "answer": "заедание горя",
-     "alternatives": ["стрессовый жир", "жир от переживаний", "заедание стресса"]},
 
     # Испанский
     {"word": "el gato", "language": "испанский", "answer": "кот",
      "alternatives": ["кошка"]},
     {"word": "el espejo", "language": "испанский", "answer": "зеркало",
      "alternatives": []},
+    {"word": "el paraguas", "language": "испанский", "answer": "зонт",
+     "alternatives": ["зонтик"]},
     {"word": "la mariposa", "language": "испанский", "answer": "бабочка",
      "alternatives": ["мотылёк"]},
-    {"word": "la sobremesa", "language": "испанский", "answer": "разговор за столом после еды",
-     "alternatives": ["посиделки после обеда", "время за столом после еды"]},
 
     # Украинский
     {"word": "кіт", "language": "украинский", "answer": "кот",
@@ -59,8 +60,8 @@ WORDS = [
      "alternatives": []},
     {"word": "матылёк", "language": "белорусский", "answer": "бабочка",
      "alternatives": ["мотылёк"]},
+    {"word": "агурок", "language": "белорусский", "answer": "огурец",
+     "alternatives": []},
     {"word": "парасон", "language": "белорусский", "answer": "зонтик",
      "alternatives": ["зонт"]},
-    {"word": "вавёрка", "language": "белорусский", "answer": "белка",
-     "alternatives": []},
 ]
