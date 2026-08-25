@@ -16,6 +16,7 @@ Language Ducks — маленький сервер для игры.
 import json
 import random
 import socket
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -29,6 +30,9 @@ MAX_PLAYERS = 10
 MIN_PLAYERS = 2
 MAX_NAME_LENGTH = 12
 WORDS_PER_ROUND = 5
+# Сколько секунд ждём после последнего ответа, прежде чем показать
+# результаты — чтобы последний игрок успел убрать палец от экрана.
+REVEAL_DELAY_SECONDS = 2.0
 
 # Состояние игры целиком живёт здесь, в памяти сервера.
 # Дальше, в следующих частях, сюда добавятся вопросы, очки и т.д.
@@ -45,6 +49,9 @@ WORDS_PER_ROUND = 5
 # word_index — индекс текущего слова в words (0 — первое слово).
 # answers — ответы игроков на текущее слово: id игрока -> его ответ.
 # Очищается, когда игра переходит к следующему слову.
+# all_answered_time — момент (time.time()), когда ответили все игроки.
+# None, пока кто-то ещё не ответил. Нужен, чтобы показать результаты
+# не сразу, а через REVEAL_DELAY_SECONDS — дать время убрать палец.
 game_state = {
     "players": [],
     "phase": "lobby",
@@ -52,7 +59,23 @@ game_state = {
     "words": [],
     "word_index": 0,
     "answers": {},
+    "all_answered_time": None,
 }
+
+
+def normalize_answer(text):
+    """Приводит ответ к виду для сравнения: без пробелов по краям,
+    в нижнем регистре, «ё» приравнена к «е». Никакой другой хитрости."""
+    return text.strip().lower().replace("ё", "е")
+
+
+def is_answer_correct(word, answer_text):
+    """Проверяет ответ игрока по основному переводу и запасным вариантам."""
+    if not answer_text:
+        return False
+    candidates = [word["answer"]] + word.get("alternatives", [])
+    normalized_candidates = {normalize_answer(candidate) for candidate in candidates}
+    return normalize_answer(answer_text) in normalized_candidates
 
 
 def handle_join(payload):
@@ -139,6 +162,7 @@ def handle_start(payload):
     game_state["words"] = random.sample(WORDS, WORDS_PER_ROUND)
     game_state["word_index"] = 0
     game_state["answers"] = {}
+    game_state["all_answered_time"] = None
     return {"ok": True}
 
 
@@ -169,6 +193,8 @@ def handle_answer(payload):
 
     if player_id not in game_state["answers"]:
         game_state["answers"][player_id] = answer_text
+        if len(game_state["answers"]) >= len(game_state["players"]):
+            game_state["all_answered_time"] = time.time()
 
     return {"ok": True}
 
@@ -252,6 +278,28 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 if player["id"] in game_state["answers"]
             ]
 
+            # Показываем результаты только через REVEAL_DELAY_SECONDS после
+            # того, как ответил последний игрок — чтобы успел убрать палец.
+            revealed = (
+                current_word is not None
+                and game_state["all_answered_time"] is not None
+                and (time.time() - game_state["all_answered_time"]) >= REVEAL_DELAY_SECONDS
+            )
+
+            results = []
+            my_correct = False
+            if revealed:
+                for player in game_state["players"]:
+                    player_answer = game_state["answers"].get(player["id"])
+                    results.append({
+                        "name": player["name"],
+                        "answered": player["id"] in game_state["answers"],
+                        "answer": player_answer,
+                        "correct": is_answer_correct(current_word, player_answer),
+                    })
+                if player_id:
+                    my_correct = is_answer_correct(current_word, game_state["answers"].get(player_id))
+
             self.send_json({
                 "address": "{}:{}".format(LOCAL_IP, PORT),
                 "playerCount": len(game_state["players"]),
@@ -269,6 +317,10 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 and len(game_state["answers"]) >= len(game_state["players"]),
                 "myAnswered": bool(player_id) and player_id in game_state["answers"],
                 "myAnswerText": game_state["answers"].get(player_id) if player_id else None,
+                "revealed": revealed,
+                "correctAnswer": current_word["answer"] if revealed else None,
+                "results": results,
+                "myCorrect": my_correct,
             })
             return
 

@@ -31,6 +31,14 @@
     <div class="answered-count" id="answered-count"></div>
     <div class="all-answered-note" id="all-answered-note" hidden>Все ответили!</div>
   </div>
+
+  <div class="reveal-panel" id="reveal-panel" hidden>
+    <div class="reveal-header">
+      <div class="reveal-word" id="reveal-word"></div>
+      <div class="reveal-correct">Правильный перевод: <span id="reveal-correct-answer"></span></div>
+    </div>
+    <div class="reveal-cards" id="reveal-cards"></div>
+  </div>
 </div>
 
 <script src="app.js"></script>
@@ -61,11 +69,22 @@
       const joinPanel = document.querySelector(".join-panel");
       const playersPanel = document.getElementById("players-panel");
       const playingPanel = document.getElementById("playing-panel");
+      const revealPanel = document.getElementById("reveal-panel");
+
+      if (info.phase === "playing" && info.revealed) {
+        joinPanel.hidden = true;
+        playersPanel.hidden = true;
+        playingPanel.hidden = true;
+        revealPanel.hidden = false;
+        renderReveal(info);
+        return;
+      }
 
       if (info.phase === "playing") {
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = false;
+        revealPanel.hidden = true;
         renderWord(info);
         return;
       }
@@ -73,6 +92,7 @@
       joinPanel.hidden = false;
       playersPanel.hidden = false;
       playingPanel.hidden = true;
+      revealPanel.hidden = true;
       document.getElementById("join-address").textContent = info.address;
       document.getElementById("players-count").textContent =
         "Игроков: " + info.playerCount + " из " + MAX_PLAYERS;
@@ -101,6 +121,42 @@
     document.getElementById("answered-count").textContent =
       "Ответили " + info.answeredCount + " из " + info.players.length;
     document.getElementById("all-answered-note").hidden = !info.allAnswered;
+  }
+
+  function renderReveal(info) {
+    document.getElementById("reveal-word").textContent = info.word || "";
+    document.getElementById("reveal-correct-answer").textContent = info.correctAnswer || "";
+
+    const cardsContainer = document.getElementById("reveal-cards");
+    cardsContainer.innerHTML = "";
+    info.results.forEach((result, index) => {
+      const card = document.createElement("div");
+      card.className = "answer-card" + (!result.answered ? " missing" : result.correct ? " correct" : "");
+      card.style.animationDelay = (index * 150) + "ms";
+
+      const info_block = document.createElement("div");
+      info_block.className = "answer-card-info";
+      const nameEl = document.createElement("div");
+      nameEl.className = "answer-card-name";
+      nameEl.textContent = result.name;
+      const textEl = document.createElement("div");
+      textEl.className = "answer-card-text";
+      textEl.textContent = result.answered ? result.answer : "нет ответа";
+      info_block.appendChild(nameEl);
+      info_block.appendChild(textEl);
+
+      const verdict = document.createElement("div");
+      verdict.className = "answer-card-verdict";
+      if (!result.answered) {
+        verdict.textContent = "НЕТ ОТВЕТА";
+      } else if (result.correct) {
+        verdict.textContent = "ВЕРНО";
+      }
+
+      card.appendChild(info_block);
+      card.appendChild(verdict);
+      cardsContainer.appendChild(card);
+    });
   }
 
   renderPlayers([]);

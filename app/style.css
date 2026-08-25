@@ -242,6 +242,124 @@ body {
   text-align: center;
 }
 
+.reveal-panel {
+  width: 100%;
+  background: var(--panel);
+  border: var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--glow-panel);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.reveal-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  text-align: center;
+}
+
+.reveal-word {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 36px;
+  color: var(--accent);
+  -webkit-text-stroke: 2px var(--main);
+  paint-order: stroke fill;
+  text-shadow: var(--glow-word);
+}
+
+.reveal-correct {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--main);
+}
+
+.reveal-correct span {
+  font-family: var(--font-head);
+  font-weight: 800;
+}
+
+.reveal-cards {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.answer-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--card);
+  border: var(--card-edge);
+  border-radius: var(--radius-s);
+  padding: 14px 20px;
+  opacity: 0;
+  animation: cardAppear .5s ease forwards;
+}
+
+.answer-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.answer-card-name {
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.answer-card-text {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--text);
+}
+
+.answer-card-verdict {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: .06em;
+  color: var(--accent);
+}
+
+.answer-card.correct {
+  background: var(--card-ok);
+  border: var(--ok-edge);
+  box-shadow: var(--glow-ok);
+}
+
+.answer-card.correct .answer-card-text {
+  color: var(--accent);
+}
+
+.answer-card.missing .answer-card-text {
+  color: var(--text-dim);
+}
+
+.answer-card.missing .answer-card-verdict {
+  color: var(--text-dim);
+}
+
+@keyframes cardAppear {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes playerAppear {
   from {
     box-shadow: 0 0 30px rgba(53,216,255,.9);
@@ -410,6 +528,11 @@ body {
   font-size: 64px;
   color: var(--accent);
   text-shadow: var(--glow-btn);
+}
+
+.submitted-check.wrong {
+  color: var(--text-dim);
+  text-shadow: none;
 }
 
 .submitted-answer {

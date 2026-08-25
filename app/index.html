@@ -45,8 +45,8 @@
 
   <div id="submitted-view" class="waiting-view" hidden>
     <div class="waiting-name">Ты играешь как <span id="submitted-player-name"></span></div>
-    <div class="submitted-check">✓</div>
-    <div class="waiting-text">Ответ принят, жди остальных</div>
+    <div class="submitted-check" id="submitted-check">✓</div>
+    <div class="waiting-text" id="submitted-status">Ответ принят, жди остальных</div>
     <div class="submitted-answer" id="submitted-answer-text"></div>
     <div class="answered-count" id="submitted-answered-count"></div>
   </div>
@@ -77,6 +77,8 @@
   const phoneAnsweredCount = document.getElementById("phone-answered-count");
 
   const submittedPlayerName = document.getElementById("submitted-player-name");
+  const submittedCheck = document.getElementById("submitted-check");
+  const submittedStatus = document.getElementById("submitted-status");
   const submittedAnswerText = document.getElementById("submitted-answer-text");
   const submittedAnsweredCount = document.getElementById("submitted-answered-count");
 
@@ -137,15 +139,33 @@
   function renderSubmittedView(info) {
     hideAllViews();
     submittedView.hidden = false;
-    submittedAnswerText.textContent = info.myAnswerText || "";
+    submittedAnswerText.textContent = info.myAnswered ? (info.myAnswerText || "") : "";
     submittedAnsweredCount.textContent = "Ответили " + info.answeredCount + " из " + info.playerCount;
+
+    if (!info.revealed) {
+      submittedCheck.textContent = "✓";
+      submittedCheck.classList.remove("wrong");
+      submittedStatus.textContent = "Ответ принят, жди остальных";
+    } else if (!info.myAnswered) {
+      submittedCheck.textContent = "✗";
+      submittedCheck.classList.add("wrong");
+      submittedStatus.textContent = "Ты не успел ответить";
+    } else if (info.myCorrect) {
+      submittedCheck.textContent = "✓";
+      submittedCheck.classList.remove("wrong");
+      submittedStatus.textContent = "Ты угадал!";
+    } else {
+      submittedCheck.textContent = "✗";
+      submittedCheck.classList.add("wrong");
+      submittedStatus.textContent = "Мимо";
+    }
   }
 
   // Решает, какой экран телефона показать прямо сейчас, по свежим
   // данным с сервера.
   function renderPhase(info) {
     if (info.phase === "playing") {
-      if (info.myAnswered) {
+      if (info.myAnswered || info.revealed) {
         renderSubmittedView(info);
       } else {
         renderAnswerView(info);
