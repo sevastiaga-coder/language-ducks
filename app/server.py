@@ -30,8 +30,6 @@ APP_DIR = Path(__file__).resolve().parent
 MAX_PLAYERS = 10
 MIN_PLAYERS = 2
 MAX_NAME_LENGTH = 12
-WORDS_PER_ROUND = 5
-TRICK_WORDS_PER_ROUND = 3
 # Сколько секунд ждём после последнего ответа, прежде чем показать
 # результаты — чтобы последний игрок успел убрать палец от экрана.
 REVEAL_DELAY_SECONDS = 2.0
@@ -51,7 +49,6 @@ POINTS_TRICK_GUESS = 150
 POINTS_TRICK_FOOLED = 100
 
 # Состояние игры целиком живёт здесь, в памяти сервера.
-# Дальше, в следующих частях, сюда добавятся вопросы, очки и т.д.
 # players — список словарей вида {"id": "...", "name": "..."}. Первый
 # в списке — это игрок, который зашёл раньше всех, и только он может
 # начать игру.
@@ -693,21 +690,34 @@ class GameRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def serve_file(self, filename):
+        # Раздаём только файлы страниц — никаких .py (там, например,
+        # words.py со всеми правильными ответами) и ничего за пределами
+        # папки app/, даже если в адресе телефона написать "../../etc/passwd".
+        content_types = {
+            ".html": "text/html; charset=utf-8",
+            ".css": "text/css; charset=utf-8",
+            ".js": "application/javascript; charset=utf-8",
+            ".ico": "image/x-icon",
+        }
         file_path = APP_DIR / filename
-        if not file_path.is_file():
+        content_type = content_types.get(file_path.suffix)
+        try:
+            resolved_path = file_path.resolve()
+        except OSError:
+            resolved_path = None
+
+        is_inside_app = (
+            resolved_path is not None
+            and (resolved_path == APP_DIR or APP_DIR in resolved_path.parents)
+        )
+
+        if content_type is None or not is_inside_app or not resolved_path.is_file():
             # Сообщение об ошибке должно быть латиницей — иначе сервер
             # падает при запросе, например, браузером /favicon.ico.
             self.send_error(404, "Not found")
             return
 
-        content_types = {
-            ".html": "text/html; charset=utf-8",
-            ".css": "text/css; charset=utf-8",
-            ".js": "application/javascript; charset=utf-8",
-        }
-        content_type = content_types.get(file_path.suffix, "application/octet-stream")
-
-        body = file_path.read_bytes()
+        body = resolved_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -754,8 +764,9 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 if player["id"] in submissions
             ]
 
-            # Раскрытие ответов есть только у «Перевода» — у «Обманки» в
-            # этой части игры дальше голосования (часть 10) пока не идёт.
+            # Раскрытие ответов (revealed) — только у «Перевода». У
+            # «Обманки» своё раскрытие, отдельным полем (trickRevealed,
+            # ниже), потому что там сначала голосование, а не сразу ответ.
             revealed = (
                 stage == "translate"
                 and current_word is not None
@@ -934,70 +945,43 @@ class GameRequestHandler(BaseHTTPRequestHandler):
         # Убираем ведущий "/", чтобы отдать файл из папки app/
         self.serve_file(path.lstrip("/"))
 
+    def read_json_body(self):
+        """Читает тело POST-запроса и разбирает его как JSON.
+
+        Если заголовок Content-Length кривой (не число, отрицательный,
+        отсутствует) или тело — не валидный JSON, просто возвращает
+        пустой словарь вместо падения сервера с трейсбеком в терминале.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            length = 0
+        if length <= 0:
+            return {}
+        raw_body = self.rfile.read(length)
+        try:
+            return json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return {}
+
     def do_POST(self):
         path = self.path.split("?")[0]
 
-        if path == "/api/join":
-            length = int(self.headers.get("Content-Length", 0) or 0)
-            raw_body = self.rfile.read(length) if length else b"{}"
-            try:
-                payload = json.loads(raw_body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                payload = {}
-            self.send_json(handle_join(payload))
+        handlers = {
+            "/api/join": handle_join,
+            "/api/start": handle_start,
+            "/api/answer": handle_answer,
+            "/api/fib": handle_fib,
+            "/api/vote": handle_vote,
+            "/api/restart": handle_restart,
+        }
+        handler = handlers.get(path)
+        if handler is None:
+            self.send_error(404, "Not found")
             return
 
-        if path == "/api/start":
-            length = int(self.headers.get("Content-Length", 0) or 0)
-            raw_body = self.rfile.read(length) if length else b"{}"
-            try:
-                payload = json.loads(raw_body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                payload = {}
-            self.send_json(handle_start(payload))
-            return
-
-        if path == "/api/answer":
-            length = int(self.headers.get("Content-Length", 0) or 0)
-            raw_body = self.rfile.read(length) if length else b"{}"
-            try:
-                payload = json.loads(raw_body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                payload = {}
-            self.send_json(handle_answer(payload))
-            return
-
-        if path == "/api/fib":
-            length = int(self.headers.get("Content-Length", 0) or 0)
-            raw_body = self.rfile.read(length) if length else b"{}"
-            try:
-                payload = json.loads(raw_body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                payload = {}
-            self.send_json(handle_fib(payload))
-            return
-
-        if path == "/api/vote":
-            length = int(self.headers.get("Content-Length", 0) or 0)
-            raw_body = self.rfile.read(length) if length else b"{}"
-            try:
-                payload = json.loads(raw_body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                payload = {}
-            self.send_json(handle_vote(payload))
-            return
-
-        if path == "/api/restart":
-            length = int(self.headers.get("Content-Length", 0) or 0)
-            raw_body = self.rfile.read(length) if length else b"{}"
-            try:
-                payload = json.loads(raw_body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                payload = {}
-            self.send_json(handle_restart(payload))
-            return
-
-        self.send_error(404, "Not found")
+        payload = self.read_json_body()
+        self.send_json(handler(payload))
 
 
 def main():
