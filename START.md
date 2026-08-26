@@ -9,7 +9,7 @@
 **Одна папка — один проект.** Папка `MyStudio` — это шаблон: её не трогаем, а копируем под каждый новый проект.
 
 ```bash
-cd "/Users/olegkobyzev/Documents/Проекты code"
+cd ~/Documents/"Проекты code"        # папка, где лежат все проекты
 cp -R MyStudio cat-game        # cat-game — имя проекта, по-английски
 ```
 
