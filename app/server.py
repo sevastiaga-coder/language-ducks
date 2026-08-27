@@ -59,9 +59,11 @@ LAST_SEEN_TIMEOUT_SECONDS = 30
 # экране ноутбука, прежде чем сама включится первое слово «Обманки» —
 # чтобы за столом успели понять, что правила игры поменялись.
 INTERMISSION_SECONDS = 6.0
-# Сколько секунд держим показ ответов, прежде чем перейти к следующему
-# слову — чтобы за столом успели посмотреть и обсудить.
-NEXT_WORD_DELAY_SECONDS = 20.0
+# Сколько секунд держим показ результатов, прежде чем перейти к следующему
+# слову — чтобы за столом успели посмотреть и обсудить. В «Обманке» дольше:
+# там разбирают, кто кого обманул, и это самое весёлое место игры.
+TRANSLATE_RESULT_SECONDS = 10.0
+TRICK_RESULT_SECONDS = 15.0
 # Сколько очков даёт правильный ответ. Неверный или пропущенный — 0.
 POINTS_CORRECT = 100
 # Очки за «Обманку» (решение босса): столько получает тот, кто нашёл
@@ -94,7 +96,7 @@ POINTS_TRICK_FOOLED = 100
 # время убрать палец.
 # scored_this_word — очки за текущее слово «Перевода» уже начислены
 # игрокам (True) или ещё нет (False). Не даёт начислить очки дважды за
-# одно слово, пока сервер ждёт NEXT_WORD_DELAY_SECONDS перед следующим.
+# одно слово, пока сервер держит показ результатов перед следующим.
 # previous_words — слова прошлой партии (той, что только что закончилась).
 # Нужны, чтобы при выборе слов новой партии не брать те же самые.
 # previous_trick_words — то же самое, но для слов «Обманки».
@@ -125,7 +127,7 @@ POINTS_TRICK_FOOLED = 100
 # чтобы раскрыть итоги не сразу, а через REVEAL_DELAY_SECONDS.
 # trick_scored_this_word — очки за текущее слово «Обманки» уже начислены
 # (True) или ещё нет (False). Не даёт начислить очки дважды за одно
-# слово, пока сервер ждёт NEXT_WORD_DELAY_SECONDS перед следующим.
+# слово, пока сервер держит показ результатов перед следующим.
 game_state = {
     "players": [],
     "phase": "lobby",
@@ -579,7 +581,7 @@ def advance_game():
 
 def advance_translate():
     """Начисляет очки за раскрытое слово «Перевода» и, спустя
-    NEXT_WORD_DELAY_SECONDS после раскрытия, переходит к следующему
+    TRANSLATE_RESULT_SECONDS после раскрытия, переходит к следующему
     слову или (после последнего) — к финалу."""
     if not game_state["words"]:
         return
@@ -599,7 +601,7 @@ def advance_translate():
                 player["score"] += POINTS_CORRECT
         game_state["scored_this_word"] = True
 
-    if now - reveal_time >= NEXT_WORD_DELAY_SECONDS:
+    if now - reveal_time >= TRANSLATE_RESULT_SECONDS:
         if game_state["word_index"] + 1 < len(game_state["words"]):
             game_state["word_index"] += 1
             game_state["answers"] = {}
@@ -637,7 +639,7 @@ def advance_trick():
        разойдутся между устройствами.
     2. Спустя REVEAL_DELAY_SECONDS после того, как проголосовали все,
        начисляет очки за раскрытые итоги (score_trick_word) и, ещё
-       через NEXT_WORD_DELAY_SECONDS, переходит к следующему слову
+       через TRICK_RESULT_SECONDS, переходит к следующему слову
        «Обманки» или — после последнего — к финалу.
     """
     if not game_state["trick_words"]:
@@ -675,7 +677,7 @@ def advance_trick():
             score_trick_word()
             game_state["trick_scored_this_word"] = True
 
-        if now - reveal_time >= NEXT_WORD_DELAY_SECONDS:
+        if now - reveal_time >= TRICK_RESULT_SECONDS:
             if game_state["trick_index"] + 1 < len(game_state["trick_words"]):
                 game_state["trick_index"] += 1
                 game_state["fibs"] = {}
