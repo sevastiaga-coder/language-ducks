@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<button class="sound-toggle" id="sound-toggle" type="button" aria-label="Звук утки">🔇</button>
 <div class="screen">
   <h1 class="game-title" id="game-title">LANGUAGE DUCKS</h1>
 
@@ -68,7 +69,10 @@
     <div class="reveal-header">
       <div class="reveal-word" id="reveal-word"></div>
       <div class="word-language" id="reveal-language"></div>
-      <div class="reveal-correct">Правильный перевод: <span id="reveal-correct-answer"></span></div>
+    </div>
+    <div class="real-card">
+      <div class="real-card-badge">ПРАВИЛЬНЫЙ ПЕРЕВОД</div>
+      <div class="real-card-text" id="reveal-correct-answer"></div>
     </div>
     <div class="reveal-body">
       <div class="reveal-cards" id="reveal-cards"></div>
@@ -121,6 +125,110 @@
   let lastRevealKey = null;
   let lastTrickRevealKey = null;
   let lastFinalKey = null;
+  let lastPhase = null;
+
+  // --- Звук утки (только этот экран, не телефон) ---
+  // Браузер не даёт играть звук, пока по странице ни разу не кликнули —
+  // поэтому до первого клика по кнопке честно показываем «выключено»,
+  // даже если в прошлый раз звук оставили включённым.
+  const SOUND_PREF_KEY = "duckSoundOn";
+  let audioContext = null;
+  let audioUnlocked = false;
+  let soundOn = localStorage.getItem(SOUND_PREF_KEY) !== "0"; // по умолчанию звук нужен
+
+  // По одному набору «кто уже крякнул» на каждый список с галочками —
+  // сбрасываем его, когда меняется слово, чтобы не крякать повторно за
+  // тех, кто уже отмечен.
+  let translateQuackWordIndex = null;
+  let translateQuackedNames = new Set();
+  let fibQuackWordIndex = null;
+  let fibQuackedNames = new Set();
+  let voteQuackWordIndex = null;
+  let voteQuackedNames = new Set();
+
+  function getAudioContext() {
+    if (!audioContext) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      audioContext = new AudioContextClass();
+    }
+    return audioContext;
+  }
+
+  // Синтезируем «кряк» прямо в браузере через Web Audio API — никаких
+  // звуковых файлов. Пилообразная волна с быстрым дрожанием частоты и
+  // резкой огибающей звучит забавно, а не как писк будильника.
+  function playQuack() {
+    if (!audioUnlocked || !soundOn) {
+      return;
+    }
+    try {
+      const ctx = getAudioContext();
+      const now = ctx.currentTime;
+      const duration = 0.18;
+
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(560, now);
+      osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(420, now + duration);
+
+      // Быстрое дрожание поверх основной частоты — то, что делает звук
+      // похожим на кряканье, а не на ровный свист.
+      const wobble = ctx.createOscillator();
+      wobble.frequency.value = 60;
+      const wobbleGain = ctx.createGain();
+      wobbleGain.gain.value = 70;
+      wobble.connect(wobbleGain);
+      wobbleGain.connect(osc.frequency);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.5, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      wobble.start(now);
+      osc.stop(now + duration + 0.02);
+      wobble.stop(now + duration + 0.02);
+    } catch (error) {
+      // Звук — не главное. Браузер отказал — просто играем без него.
+    }
+  }
+
+  function updateSoundButton() {
+    const button = document.getElementById("sound-toggle");
+    const showOn = audioUnlocked && soundOn;
+    button.textContent = showOn ? "🔊" : "🔇";
+    button.classList.toggle("on", showOn);
+  }
+
+  document.getElementById("sound-toggle").addEventListener("click", () => {
+    if (!audioUnlocked) {
+      // Первый клик — это и есть разрешение браузера на звук.
+      getAudioContext().resume().catch(() => {});
+      audioUnlocked = true;
+    } else {
+      soundOn = !soundOn;
+      localStorage.setItem(SOUND_PREF_KEY, soundOn ? "1" : "0");
+    }
+    updateSoundButton();
+  });
+
+  updateSoundButton();
+
+  // Крякаем по разу за каждое новое имя, появившееся в списке галочек,
+  // — не на каждый опрос сервера и не повторно для уже отмеченных.
+  function quackForNewNames(names, quackedNames) {
+    names.forEach((name) => {
+      if (!quackedNames.has(name)) {
+        quackedNames.add(name);
+        playQuack();
+      }
+    });
+  }
 
   function renderPlayers(names) {
     const key = names.join("|");
@@ -148,6 +256,19 @@
   async function updateInfo() {
     try {
       const info = await fetchGameInfo();
+
+      // Новая партия началась — старые «кто уже крякнул» относятся к
+      // прошлой игре и могут случайно совпасть номерами слов с новой.
+      if (info.phase === "playing" && lastPhase !== "playing") {
+        translateQuackWordIndex = null;
+        translateQuackedNames = new Set();
+        fibQuackWordIndex = null;
+        fibQuackedNames = new Set();
+        voteQuackWordIndex = null;
+        voteQuackedNames = new Set();
+      }
+      lastPhase = info.phase;
+
       const joinPanel = document.querySelector(".join-panel");
       const playersPanel = document.getElementById("players-panel");
       const playingPanel = document.getElementById("playing-panel");
@@ -314,6 +435,12 @@
     wordEl.classList.toggle("cyr", isCyrillic(info.word));
     document.getElementById("word-language").textContent = info.wordLanguage || "";
 
+    if (info.wordIndex !== translateQuackWordIndex) {
+      translateQuackWordIndex = info.wordIndex;
+      translateQuackedNames = new Set();
+    }
+    quackForNewNames(info.answeredNames, translateQuackedNames);
+
     const answeredKey = info.wordIndex + "|" + info.players.join(",") + "|" +
       info.answeredNames.slice().sort().join(",");
     if (answeredKey !== lastAnsweredKey) {
@@ -342,6 +469,12 @@
     wordEl.classList.toggle("cyr", isCyrillic(info.word));
     document.getElementById("fib-language").textContent = info.wordLanguage || "";
 
+    if (info.wordIndex !== fibQuackWordIndex) {
+      fibQuackWordIndex = info.wordIndex;
+      fibQuackedNames = new Set();
+    }
+    quackForNewNames(info.answeredNames, fibQuackedNames);
+
     const fibKey = info.wordIndex + "|" + info.players.join(",") + "|" +
       info.answeredNames.slice().sort().join(",");
     if (fibKey !== lastFibKey) {
@@ -367,6 +500,12 @@
     wordEl.textContent = info.word || "";
     wordEl.classList.toggle("cyr", isCyrillic(info.word));
     document.getElementById("vote-language").textContent = info.wordLanguage || "";
+
+    if (info.wordIndex !== voteQuackWordIndex) {
+      voteQuackWordIndex = info.wordIndex;
+      voteQuackedNames = new Set();
+    }
+    quackForNewNames(info.votedNames, voteQuackedNames);
 
     // Список вариантов не пересоздаём каждую секунду опроса — только
     // когда слово реально сменилось. Авторов вариантов сервер сюда не

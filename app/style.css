@@ -441,21 +441,10 @@ body {
   text-shadow: var(--glow-word);
 }
 
-.reveal-correct {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--main);
-}
-
-.reveal-correct span {
-  font-family: var(--font-body);
-  font-weight: 800;
-}
-
-/* Настоящий перевод на итоге «Обманки» (Л6) — ответ на вопрос, ради
-   которого весь этап, поэтому отдельная широкая карточка над сеткой
-   выдумок, крупно, с тем же приёмом подсветки, что и верная карточка
-   «Перевода». */
+/* Настоящий перевод и на показе «Перевода» (Л3), и на итоге «Обманки»
+   (Л6) — ответ на вопрос, ради которого весь этап, поэтому отдельная
+   широкая карточка над сеткой ответов/выдумок, крупно, с одинаковым
+   приёмом подсветки на обоих экранах. */
 .real-card {
   width: 100%;
   background: var(--card-ok);
@@ -878,6 +867,35 @@ body {
   to {
     box-shadow: none;
   }
+}
+
+/* Кнопка звука (Л1–Л7) — маленький кружок в углу, поверх любого экрана,
+   не спорит с главным содержимым. Пока звук не разрешён кликом или
+   выключен вручную — приглушённая, как неактивная второстепенная
+   кнопка; включён — обычная голубая, как остальные второстепенные
+   кнопки. */
+.sound-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid var(--text-dim);
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.sound-toggle.on {
+  border-color: var(--main);
+  color: var(--main);
 }
 
 /* --- Экран телефона --- */
