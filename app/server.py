@@ -62,8 +62,8 @@ INTERMISSION_SECONDS = 6.0
 # Сколько секунд держим показ результатов, прежде чем перейти к следующему
 # слову — чтобы за столом успели посмотреть и обсудить. В «Обманке» дольше:
 # там разбирают, кто кого обманул, и это самое весёлое место игры.
-TRANSLATE_RESULT_SECONDS = 10.0
-TRICK_RESULT_SECONDS = 15.0
+TRANSLATE_RESULT_SECONDS = 6.0
+TRICK_RESULT_SECONDS = 10.0
 # Сколько очков даёт правильный ответ. Неверный или пропущенный — 0.
 POINTS_CORRECT = 100
 # Очки за «Обманку» (решение босса): столько получает тот, кто нашёл
@@ -836,6 +836,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             ".css": "text/css; charset=utf-8",
             ".js": "application/javascript; charset=utf-8",
             ".ico": "image/x-icon",
+            ".wav": "audio/wav",
         }
         file_path = APP_DIR / filename
         content_type = content_types.get(file_path.suffix)

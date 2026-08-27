@@ -154,45 +154,58 @@
     return audioContext;
   }
 
-  // Синтезируем «кряк» прямо в браузере через Web Audio API — никаких
-  // звуковых файлов. Пилообразная волна с быстрым дрожанием частоты и
-  // резкой огибающей звучит забавно, а не как писк будильника.
+  // Настоящие кряки, вырезанные из записи утки (см. sounds/ИСТОЧНИК.md).
+  // Три разных файла — чтобы кряканье не звучало как один и тот же
+  // повтор, когда за столом отвечают подряд несколько человек.
+  const QUACK_FILES = ["sounds/quack-1.wav", "sounds/quack-2.wav", "sounds/quack-3.wav"];
+  // Если кряки наложатся день в день — звучит как утиный птичник.
+  // Поэтому каждый следующий кряк сдвигается минимум на этот интервал
+  // от предыдущего, даже если запросил его точно в ту же миллисекунду.
+  const QUACK_STAGGER_SECONDS = 0.09;
+  let quackBuffers = [];
+  let lastQuackIndex = -1;
+  let nextQuackTime = 0;
+
+  // Загружаем и распаковываем все три файла один раз при открытии
+  // страницы — чтобы кряк звучал мгновенно в момент появления галочки,
+  // а не только после того, как файл скачается.
+  function loadQuackBuffers() {
+    const ctx = getAudioContext();
+    Promise.all(
+      QUACK_FILES.map((url) =>
+        fetch(url)
+          .then((response) => response.arrayBuffer())
+          .then((data) => ctx.decodeAudioData(data))
+      )
+    )
+      .then((buffers) => {
+        quackBuffers = buffers;
+      })
+      .catch(() => {
+        // Звук — не главное. Файлы не загрузились — просто играем без него.
+      });
+  }
+  loadQuackBuffers();
+
   function playQuack() {
-    if (!audioUnlocked || !soundOn) {
+    if (!audioUnlocked || !soundOn || quackBuffers.length === 0) {
       return;
     }
     try {
       const ctx = getAudioContext();
-      const now = ctx.currentTime;
-      const duration = 0.18;
+      let index = Math.floor(Math.random() * quackBuffers.length);
+      if (quackBuffers.length > 1 && index === lastQuackIndex) {
+        index = (index + 1) % quackBuffers.length;
+      }
+      lastQuackIndex = index;
 
-      const osc = ctx.createOscillator();
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(560, now);
-      osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
-      osc.frequency.exponentialRampToValueAtTime(420, now + duration);
+      const source = ctx.createBufferSource();
+      source.buffer = quackBuffers[index];
+      source.connect(ctx.destination);
 
-      // Быстрое дрожание поверх основной частоты — то, что делает звук
-      // похожим на кряканье, а не на ровный свист.
-      const wobble = ctx.createOscillator();
-      wobble.frequency.value = 60;
-      const wobbleGain = ctx.createGain();
-      wobbleGain.gain.value = 70;
-      wobble.connect(wobbleGain);
-      wobbleGain.connect(osc.frequency);
-
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.5, now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(now);
-      wobble.start(now);
-      osc.stop(now + duration + 0.02);
-      wobble.stop(now + duration + 0.02);
+      const startTime = Math.max(ctx.currentTime, nextQuackTime);
+      nextQuackTime = startTime + QUACK_STAGGER_SECONDS;
+      source.start(startTime);
     } catch (error) {
       // Звук — не главное. Браузер отказал — просто играем без него.
     }

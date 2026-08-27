@@ -39,3 +39,5 @@
 ---
 
 Игру сделал Sevastiaga.
+
+Звук утиного кряка — из записи «Pekin duck & mallard» автора WaderClub с Викисклада (Wikimedia Commons), лицензия CC BY-SA 4.0.
