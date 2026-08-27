@@ -40,4 +40,4 @@
 
 Игру сделал Sevastiaga.
 
-Звук утиного кряка — из записи «Pekin duck & mallard» автора WaderClub с Викисклада (Wikimedia Commons), лицензия CC BY-SA 4.0.
+Кряканье уток — из записей крякв Jonathon Jongsma с Викисклада (лицензия CC BY-SA 3.0).
