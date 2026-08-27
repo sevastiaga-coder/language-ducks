@@ -129,6 +129,15 @@ body {
   text-align: center;
 }
 
+/* Публичный адрес в интернете (Railway) длиннее домашнего IP — переносим
+   на несколько строк и берём чуть более скромный размер, чтобы он
+   помещался на экран, но всё равно оставался крупным и жёлтым. */
+.join-address.long-address {
+  font-size: clamp(26px, 4.5vw, 52px);
+  word-break: break-all;
+  line-height: 1.25;
+}
+
 .join-hint {
   font-size: 18px;
   color: var(--main);

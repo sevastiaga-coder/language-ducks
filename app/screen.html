@@ -270,12 +270,21 @@
       revealPanel.hidden = true;
       trickRevealPanel.hidden = true;
       finalPanel.hidden = true;
-      document.getElementById("join-address").textContent = info.address;
+      var addressEl = document.getElementById("join-address");
+      addressEl.textContent = info.address;
+      // Публичный адрес в интернете (Railway) заметно длиннее домашнего
+      // IP — переключаем на более скромный стиль, чтобы он не вылезал
+      // за края экрана (см. .long-address в style.css). Домашний адрес
+      // (даже самый длинный вида 255.255.255.255:8000 — 21 символ) под
+      // это правило не попадает.
+      addressEl.classList.toggle("long-address", info.address.length > 21);
       document.getElementById("players-count").textContent =
         "Игроков: " + info.playerCount + " из " + MAX_PLAYERS;
       renderPlayers(info.players);
     } catch (error) {
-      document.getElementById("join-address").textContent = "нет связи с сервером";
+      var addressEl = document.getElementById("join-address");
+      addressEl.textContent = "нет связи с сервером";
+      addressEl.classList.remove("long-address");
     }
   }
 

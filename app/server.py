@@ -14,6 +14,7 @@ Language Ducks — маленький сервер для игры.
 """
 
 import json
+import os
 import random
 import socket
 import threading
@@ -25,11 +26,27 @@ from urllib.parse import parse_qs, urlparse
 
 from words import TRICK_WORDS, WORDS
 
-PORT = 8000
+# Дома порт всегда 8000 (см. Играть.command). В интернете (Railway)
+# площадка сама решает, какой порт слушать, и сообщает его через
+# переменную окружения PORT — если она есть, слушаем её, а не 8000.
+PORT = int(os.environ.get("PORT", 8000))
+# Публичный адрес игры кладёт сюда сама Railway, когда сервер запущен
+# у неё. Дома этой переменной нет — тогда, как и раньше, показываем
+# адрес ноутбука в домашнем Wi-Fi.
+PUBLIC_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
 APP_DIR = Path(__file__).resolve().parent
 MAX_PLAYERS = 10
 MIN_PLAYERS = 2
 MAX_NAME_LENGTH = 12
+# Ответ на этапе «Перевод» и придумка на этапе «Обманка» ограничены тем
+# же лимитом, что и поле ввода на телефоне (см. index.html). Телефон
+# сам не даёт напечатать больше, но сервер не должен верить телефону
+# на слово — а вдруг кто-то присылает запросы напрямую, а не через игру.
+MAX_ANSWER_LENGTH = 40
+# Тело запроса длиннее этого сервер даже не пытается прочитать целиком
+# (см. read_json_body) — наши сообщения (имя, ответ, голос) маленькие,
+# а большое тело — либо ошибка, либо кто-то пытается забить память.
+MAX_REQUEST_BODY_BYTES = 8192
 # Сколько секунд ждём после последнего ответа, прежде чем показать
 # результаты — чтобы последний игрок успел убрать палец от экрана.
 REVEAL_DELAY_SECONDS = 2.0
@@ -313,7 +330,7 @@ def handle_answer(payload):
     переписать свой.
     """
     player_id = payload.get("id")
-    answer_text = (payload.get("answer") or "").strip()
+    answer_text = (payload.get("answer") or "").strip()[:MAX_ANSWER_LENGTH]
 
     if game_state["phase"] != "playing" or game_state["stage"] != "translate":
         return {"ok": False, "error": "Сейчас не время отвечать"}
@@ -348,7 +365,7 @@ def handle_fib(payload):
     уже сохранена, повторную присланную просто игнорируем.
     """
     player_id = payload.get("id")
-    fib_text = (payload.get("fib") or "").strip()
+    fib_text = (payload.get("fib") or "").strip()[:MAX_ANSWER_LENGTH]
 
     if (
         game_state["phase"] != "playing"
@@ -676,6 +693,18 @@ def get_local_ip():
 LOCAL_IP = get_local_ip()
 
 
+def get_display_address():
+    """Адрес, который видят игроки на большом экране, чтобы набрать его
+    на телефоне. Если сервер запущен в интернете на Railway — там есть
+    переменная окружения RAILWAY_PUBLIC_DOMAIN, и мы показываем её: этот
+    адрес работает из любой сети, не только из домашнего Wi-Fi. Если
+    переменной нет — значит игра дома, и, как раньше, показываем адрес
+    ноутбука в локальной сети."""
+    if PUBLIC_DOMAIN:
+        return PUBLIC_DOMAIN
+    return "{}:{}".format(LOCAL_IP, PORT)
+
+
 class GameRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         # Не засорять терминал техническими логами каждого запроса.
@@ -895,7 +924,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                     my_points = my_guess_points + my_fooled_points
 
             self.send_json({
-                "address": "{}:{}".format(LOCAL_IP, PORT),
+                "address": get_display_address(),
                 "playerCount": len(game_state["players"]),
                 "players": [player["name"] for player in game_state["players"]],
                 "phase": game_state["phase"],
@@ -951,12 +980,18 @@ class GameRequestHandler(BaseHTTPRequestHandler):
         Если заголовок Content-Length кривой (не число, отрицательный,
         отсутствует) или тело — не валидный JSON, просто возвращает
         пустой словарь вместо падения сервера с трейсбеком в терминале.
+        Если тело подозрительно большое для наших маленьких сообщений
+        (имя, ответ, голос) — не читаем его целиком и закрываем
+        соединение, чтобы кривой или недобрый запрос не забил память.
         """
         try:
             length = int(self.headers.get("Content-Length", 0))
         except (TypeError, ValueError):
             length = 0
         if length <= 0:
+            return {}
+        if length > MAX_REQUEST_BODY_BYTES:
+            self.close_connection = True
             return {}
         raw_body = self.rfile.read(length)
         try:
@@ -991,9 +1026,12 @@ def main():
     print("   ИГРА ЗАПУЩЕНА!")
     print("=" * 45)
     print()
-    print("   Адрес для телефонов друзей (тот же Wi-Fi):")
+    if PUBLIC_DOMAIN:
+        print("   Адрес для друзей (из любого места в интернете):")
+    else:
+        print("   Адрес для телефонов друзей (тот же Wi-Fi):")
     print()
-    print("   >>>  {}:{}  <<<".format(LOCAL_IP, PORT))
+    print("   >>>  {}  <<<".format(get_display_address()))
     print()
     print("   Чтобы закончить игру — просто закрой это окно.")
     print("=" * 45)
