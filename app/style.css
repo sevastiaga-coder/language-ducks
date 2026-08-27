@@ -975,6 +975,13 @@ body {
   text-align: center;
 }
 
+.host-link {
+  font-size: 14px;
+  color: var(--text-dim);
+  text-align: center;
+  text-decoration: underline;
+}
+
 .waiting-view {
   width: 100%;
   display: flex;
