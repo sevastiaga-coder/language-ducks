@@ -145,6 +145,8 @@
   let fibQuackedNames = new Set();
   let voteQuackWordIndex = null;
   let voteQuackedNames = new Set();
+  // Кто из зашедших игроков уже «крякнул» при подключении.
+  let joinQuackedNames = new Set();
 
   function getAudioContext() {
     if (!audioContext) {
@@ -241,6 +243,18 @@
         playQuack();
       }
     });
+  }
+
+  // Крякаем, когда в лобби появляется новый игрок. Про тех, кто ушёл,
+  // забываем — если человек вернётся, встретим его кряком заново.
+  function quackForJoined(names) {
+    const current = new Set(names);
+    Array.from(joinQuackedNames).forEach((name) => {
+      if (!current.has(name)) {
+        joinQuackedNames.delete(name);
+      }
+    });
+    quackForNewNames(names, joinQuackedNames);
   }
 
   function renderPlayers(names) {
@@ -415,6 +429,7 @@
       document.getElementById("players-count").textContent =
         "Игроков: " + info.playerCount + " из " + MAX_PLAYERS;
       renderPlayers(info.players);
+      quackForJoined(info.players);
     } catch (error) {
       var addressEl = document.getElementById("join-address");
       addressEl.textContent = "нет связи с сервером";
