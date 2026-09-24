@@ -62,8 +62,14 @@ INTERMISSION_SECONDS = 6.0
 # Сколько секунд держим показ результатов, прежде чем перейти к следующему
 # слову — чтобы за столом успели посмотреть и обсудить. В «Обманке» дольше:
 # там разбирают, кто кого обманул, и это самое весёлое место игры.
-TRANSLATE_RESULT_SECONDS = 4.0
-TRICK_RESULT_SECONDS = 13.0
+# Это только значения по умолчанию — ведущий может поменять их прямо с
+# большого экрана (шестерёнка на Л1, см. game_state["translate_result_seconds"]
+# и game_state["trick_result_seconds"] ниже, и handle_settings).
+DEFAULT_TRANSLATE_RESULT_SECONDS = 5.0
+DEFAULT_TRICK_RESULT_SECONDS = 15.0
+# Разрешённые значения для смены длительности показа результатов — любое
+# другое число из /api/settings молча игнорируем (см. handle_settings).
+ALLOWED_RESULT_SECONDS = (5, 10, 15)
 # Сколько очков даёт правильный ответ. Неверный или пропущенный — 0.
 POINTS_CORRECT = 100
 # Очки за «Обманку» (решение босса): столько получает тот, кто нашёл
@@ -128,6 +134,12 @@ POINTS_TRICK_FOOLED = 100
 # trick_scored_this_word — очки за текущее слово «Обманки» уже начислены
 # (True) или ещё нет (False). Не даёт начислить очки дважды за одно
 # слово, пока сервер держит показ результатов перед следующим.
+# translate_result_seconds / trick_result_seconds — сколько секунд сейчас
+# держим показ результатов на каждом из этапов. Меняются через
+# handle_settings (шестерёнка на Л1) и, в отличие от всего остального
+# здесь, не сбрасываются ни в reset_to_lobby, ни в handle_restart —
+# только перезапуском сервера, как и положено настройке, а не состоянию
+# одной партии.
 game_state = {
     "players": [],
     "phase": "lobby",
@@ -150,6 +162,8 @@ game_state = {
     "votes": {},
     "votes_all_time": None,
     "trick_scored_this_word": False,
+    "translate_result_seconds": DEFAULT_TRANSLATE_RESULT_SECONDS,
+    "trick_result_seconds": DEFAULT_TRICK_RESULT_SECONDS,
 }
 
 # Защищает переход к следующему слову от гонки: экран и несколько
@@ -581,8 +595,8 @@ def advance_game():
 
 def advance_translate():
     """Начисляет очки за раскрытое слово «Перевода» и, спустя
-    TRANSLATE_RESULT_SECONDS после раскрытия, переходит к следующему
-    слову или (после последнего) — к финалу."""
+    game_state["translate_result_seconds"] после раскрытия, переходит к
+    следующему слову или (после последнего) — к финалу."""
     if not game_state["words"]:
         return
     if game_state["all_answered_time"] is None:
@@ -601,7 +615,7 @@ def advance_translate():
                 player["score"] += POINTS_CORRECT
         game_state["scored_this_word"] = True
 
-    if now - reveal_time >= TRANSLATE_RESULT_SECONDS:
+    if now - reveal_time >= game_state["translate_result_seconds"]:
         if game_state["word_index"] + 1 < len(game_state["words"]):
             game_state["word_index"] += 1
             game_state["answers"] = {}
@@ -639,8 +653,8 @@ def advance_trick():
        разойдутся между устройствами.
     2. Спустя REVEAL_DELAY_SECONDS после того, как проголосовали все,
        начисляет очки за раскрытые итоги (score_trick_word) и, ещё
-       через TRICK_RESULT_SECONDS, переходит к следующему слову
-       «Обманки» или — после последнего — к финалу.
+       через game_state["trick_result_seconds"], переходит к следующему
+       слову «Обманки» или — после последнего — к финалу.
     """
     if not game_state["trick_words"]:
         return
@@ -677,7 +691,7 @@ def advance_trick():
             score_trick_word()
             game_state["trick_scored_this_word"] = True
 
-        if now - reveal_time >= TRICK_RESULT_SECONDS:
+        if now - reveal_time >= game_state["trick_result_seconds"]:
             if game_state["trick_index"] + 1 < len(game_state["trick_words"]):
                 game_state["trick_index"] += 1
                 game_state["fibs"] = {}
@@ -777,6 +791,29 @@ def handle_restart(payload):
     game_state["votes"] = {}
     game_state["votes_all_time"] = None
     game_state["trick_scored_this_word"] = False
+    return {"ok": True}
+
+
+def handle_settings(payload):
+    """Обрабатывает изменение настроек показа результатов с большого экрана
+    (шестерёнка на Л1, Л2/Л3 и Л4/Л5/Л6 её не видят).
+
+    Каждое из двух значений необязательное и применяется по отдельности —
+    можно прислать только одно. Принимаем только разрешённые числа секунд
+    (ALLOWED_RESULT_SECONDS: 5, 10, 15) — любое другое значение (не число,
+    не из списка, отрицательное и т.д.) молча игнорируем, без ошибки:
+    сервер открыт в интернет, и присланному числу нельзя доверять на слово.
+    Действует сразу, даже посреди партии — следующий показ результатов
+    пойдёт уже по новому времени, специально усложнять не нужно.
+    """
+    translate_seconds = payload.get("translateResultSeconds")
+    if translate_seconds in ALLOWED_RESULT_SECONDS:
+        game_state["translate_result_seconds"] = float(translate_seconds)
+
+    trick_seconds = payload.get("trickResultSeconds")
+    if trick_seconds in ALLOWED_RESULT_SECONDS:
+        game_state["trick_result_seconds"] = float(trick_seconds)
+
     return {"ok": True}
 
 
@@ -1040,6 +1077,8 @@ class GameRequestHandler(BaseHTTPRequestHandler):
 
             self.send_json({
                 "address": get_display_address(),
+                "translateResultSeconds": int(game_state["translate_result_seconds"]),
+                "trickResultSeconds": int(game_state["trick_result_seconds"]),
                 "playerCount": len(game_state["players"]),
                 "players": [player["name"] for player in game_state["players"]],
                 "phase": game_state["phase"],
@@ -1124,6 +1163,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             "/api/fib": handle_fib,
             "/api/vote": handle_vote,
             "/api/restart": handle_restart,
+            "/api/settings": handle_settings,
         }
         handler = handlers.get(path)
         if handler is None:

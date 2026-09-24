@@ -9,8 +9,28 @@
 </head>
 <body>
 <button class="sound-toggle" id="sound-toggle" type="button" aria-label="Звук утки">🔇</button>
+<button class="settings-toggle" id="settings-toggle" type="button" aria-label="Настройки">⚙️</button>
 <div class="screen">
   <h1 class="game-title" id="game-title">LANGUAGE DUCKS</h1>
+
+  <div class="settings-panel" id="settings-panel" hidden>
+    <div class="settings-row">
+      <span class="settings-label">Показ результатов «Перевода»</span>
+      <div class="settings-options" id="translate-seconds-options">
+        <button class="settings-option" type="button" data-seconds="5">5 сек</button>
+        <button class="settings-option" type="button" data-seconds="10">10 сек</button>
+        <button class="settings-option" type="button" data-seconds="15">15 сек</button>
+      </div>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Показ результатов «Обманки»</span>
+      <div class="settings-options" id="trick-seconds-options">
+        <button class="settings-option" type="button" data-seconds="5">5 сек</button>
+        <button class="settings-option" type="button" data-seconds="10">10 сек</button>
+        <button class="settings-option" type="button" data-seconds="15">15 сек</button>
+      </div>
+    </div>
+  </div>
 
   <div class="join-panel">
     <div class="join-address" id="join-address">...</div>
@@ -234,6 +254,70 @@
 
   updateSoundButton();
 
+  // --- Настройки показа результатов (только Л1, шестерёнка в левом углу) ---
+  // Панель встроена в обычный поток страницы (между заголовком и адресом),
+  // а не «плавает» поверх — так она никогда не перекрывает адрес и список
+  // игроков. Чтобы открытая панель не отодвигала их вниз (при 10 игроках
+  // экран и так впритык по высоте), на время показа панели прячем крупный
+  // логотип LANGUAGE DUCKS — он декоративный, не «главное» на этом экране,
+  // а панель встаёт ровно на его место, а не добавляется поверх.
+  let settingsOpen = false;
+
+  function setSettingsOpen(open) {
+    settingsOpen = open;
+    document.getElementById("settings-panel").hidden = !open;
+    document.getElementById("game-title").hidden = open;
+    document.getElementById("settings-toggle").classList.toggle("open", open);
+  }
+
+  document.getElementById("settings-toggle").addEventListener("click", (event) => {
+    event.stopPropagation();
+    setSettingsOpen(!settingsOpen);
+  });
+
+  // Клик мимо панели (и не по самой шестерёнке) закрывает её.
+  document.addEventListener("click", (event) => {
+    if (!settingsOpen) {
+      return;
+    }
+    const panel = document.getElementById("settings-panel");
+    const toggle = document.getElementById("settings-toggle");
+    if (!panel.contains(event.target) && !toggle.contains(event.target)) {
+      setSettingsOpen(false);
+    }
+  });
+
+  // Подсвечивает кнопку с текущим значением в каждой из двух строк —
+  // по данным с сервера, чтобы все, кто смотрит на экран, видели одно
+  // и то же, даже если поменяли настройку с другого места.
+  function renderSettings(info) {
+    document.querySelectorAll("#translate-seconds-options .settings-option").forEach((btn) => {
+      btn.classList.toggle("selected", Number(btn.dataset.seconds) === info.translateResultSeconds);
+    });
+    document.querySelectorAll("#trick-seconds-options .settings-option").forEach((btn) => {
+      btn.classList.toggle("selected", Number(btn.dataset.seconds) === info.trickResultSeconds);
+    });
+  }
+
+  function setupSettingsButtons(containerId, field) {
+    document.querySelectorAll("#" + containerId + " .settings-option").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const seconds = Number(btn.dataset.seconds);
+        // Подсвечиваем сразу, не дожидаясь ответа сервера — на следующем
+        // опросе (не позже чем через секунду) значение подтвердится само.
+        btn.parentElement.querySelectorAll(".settings-option").forEach((other) => {
+          other.classList.remove("selected");
+        });
+        btn.classList.add("selected");
+        const payload = {};
+        payload[field] = seconds;
+        sendSettings(payload).catch(() => {});
+      });
+    });
+  }
+  setupSettingsButtons("translate-seconds-options", "translateResultSeconds");
+  setupSettingsButtons("trick-seconds-options", "trickResultSeconds");
+
   // Крякаем по разу за каждое новое имя, появившееся в списке галочек,
   // — не на каждый опрос сервера и не повторно для уже отмеченных.
   function quackForNewNames(names, quackedNames) {
@@ -295,6 +379,18 @@
         voteQuackedNames = new Set();
       }
       lastPhase = info.phase;
+
+      // Кнопка и панель настроек существуют только на Л1 (сбор игроков) —
+      // на игровых экранах их прячем, а открытую панель заодно закрываем,
+      // чтобы она не осталась висеть, если ведущий запустил игру, пока
+      // смотрел в неё.
+      const settingsToggle = document.getElementById("settings-toggle");
+      const isLobbyPhase = info.phase === "lobby";
+      settingsToggle.hidden = !isLobbyPhase;
+      if (!isLobbyPhase) {
+        setSettingsOpen(false);
+      }
+      renderSettings(info);
 
       const joinPanel = document.querySelector(".join-panel");
       const playersPanel = document.getElementById("players-panel");

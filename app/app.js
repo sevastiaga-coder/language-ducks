@@ -67,3 +67,14 @@ async function restartGame(playerId) {
   });
   return response.json();
 }
+
+// Меняет длительность показа результатов с большого экрана (шестерёнка
+// на Л1). payload — {translateResultSeconds: 10} и/или {trickResultSeconds: 5}.
+async function sendSettings(payload) {
+  const response = await fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}

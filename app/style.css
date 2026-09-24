@@ -898,6 +898,92 @@ body {
   color: var(--main);
 }
 
+/* Кнопка настроек (только Л1 — экран сбора игроков) — тот же кружок,
+   что и кнопка звука, зеркально в левом верхнем углу. Открыта панель —
+   подсветка голубым, как и у включённого звука. */
+.settings-toggle {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid var(--text-dim);
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.settings-toggle.open {
+  border-color: var(--main);
+  color: var(--main);
+}
+
+/* Панель настроек живёт в обычном потоке страницы, на месте логотипа
+   (см. screen.html — пока она открыта, LANGUAGE DUCKS спрятан) — не
+   «плавает» поверх и никогда не может перекрыть адрес или список
+   игроков. Каждая строка — подпись слева, три кнопки-варианта справа. */
+.settings-panel {
+  width: 100%;
+  background: var(--panel);
+  border: var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--glow-panel);
+  padding: 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-label {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 26px;
+  color: var(--text);
+}
+
+.settings-options {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-option {
+  min-width: 84px;
+  min-height: 46px;
+  padding: 4px 12px;
+  border-radius: var(--radius-s);
+  border: 2px solid var(--main);
+  background: transparent;
+  color: var(--main);
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+/* Подсветка текущего значения — тот же приём, что и у «Подсветка
+   правильного» в style.md: жёлтый фон + жёлтое свечение. */
+.settings-option.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--glow-btn);
+}
+
 /* --- Экран телефона --- */
 
 .phone-body {
