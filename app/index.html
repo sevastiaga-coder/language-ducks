@@ -8,6 +8,18 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="phone-body">
+<button id="leave-btn" class="leave-toggle" type="button" aria-label="Выйти из игры" hidden>✕</button>
+
+<div id="leave-confirm-overlay" class="leave-confirm-overlay" hidden>
+  <div class="leave-confirm-panel">
+    <div class="leave-confirm-text">Выйти из игры?</div>
+    <div class="leave-confirm-buttons">
+      <button id="leave-confirm-stay" class="primary-btn" type="button">ОСТАТЬСЯ</button>
+      <button id="leave-confirm-exit" class="danger-btn" type="button">ВЫЙТИ</button>
+    </div>
+  </div>
+</div>
+
 <div class="phone-screen">
   <h1 id="phone-title" class="phone-title">LANGUAGE DUCKS</h1>
 
@@ -160,6 +172,11 @@
   const restartBtn = document.getElementById("restart-btn");
   const restartHint = document.getElementById("restart-hint");
 
+  const leaveBtn = document.getElementById("leave-btn");
+  const leaveConfirmOverlay = document.getElementById("leave-confirm-overlay");
+  const leaveConfirmStay = document.getElementById("leave-confirm-stay");
+  const leaveConfirmExit = document.getElementById("leave-confirm-exit");
+
   let myPlayerId = null;
   let pollTimer = null;
   // Опрашивает сервер, пока показан экран «Игра уже идёт» — если
@@ -198,12 +215,14 @@
       closedPollTimer = null;
     }
     hideAllViews();
+    leaveBtn.hidden = true;
     phoneTitle.hidden = false;
     joinView.hidden = false;
   }
 
   function showClosed() {
     hideAllViews();
+    leaveBtn.hidden = true;
     closedView.hidden = false;
     if (!closedPollTimer) {
       closedPollTimer = setInterval(async () => {
@@ -463,6 +482,7 @@
   }
 
   function enterGame(name) {
+    leaveBtn.hidden = false;
     playerNameLabel.textContent = name;
     answerPlayerName.textContent = name;
     votePlayerName.textContent = name;
@@ -566,6 +586,35 @@
     } else {
       restartHint.textContent = result.error;
       restartBtn.disabled = false;
+    }
+  });
+
+  leaveBtn.addEventListener("click", () => {
+    leaveConfirmOverlay.hidden = false;
+  });
+
+  leaveConfirmStay.addEventListener("click", () => {
+    leaveConfirmOverlay.hidden = true;
+  });
+
+  leaveConfirmExit.addEventListener("click", async () => {
+    leaveConfirmExit.disabled = true;
+    await leaveGame(myPlayerId);
+    sessionStorage.removeItem("playerId");
+    sessionStorage.removeItem("playerName");
+    myPlayerId = null;
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    leaveConfirmOverlay.hidden = true;
+    leaveConfirmExit.disabled = false;
+    leaveBtn.hidden = true;
+    const info = await fetchGameInfo();
+    if (info.phase !== "lobby") {
+      showClosed();
+    } else {
+      showJoinForm();
     }
   });
 

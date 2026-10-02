@@ -14,6 +14,7 @@
   --text:          #DCE6FF;
   --text-dim:      rgba(220,230,255,.62);
   --on-accent:     #06122B;
+  --danger:        #FF4D6A;
 
   --font-head: Orbitron, "Trebuchet MS", system-ui, sans-serif;
   --font-body: Rubik, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -1294,4 +1295,86 @@ body {
    «За угадывание» и «За обманутых» между статусом и итоговым счётом. */
 .my-score-line.dim {
   color: var(--text-dim);
+}
+
+/* Кнопка выхода (телефон, после входа в игру) — кружок в левом верхнем
+   углу, тем же приёмом, что и кнопка звука/настроек на ноутбуке, но
+   красная (--danger) — явно «опасное» действие, и крупнее (48px —
+   на телефоне ничего нажимаемого мельче этого размера). */
+.leave-toggle {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid var(--danger);
+  color: var(--danger);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* Подтверждение выхода — своё окно по стилю игры (панель + две кнопки),
+   а не системный confirm(). Перекрывает весь экран, чтобы случайное
+   касание рядом не закрыло его само. */
+.leave-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11,16,38,.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 20;
+}
+
+.leave-confirm-panel {
+  width: 100%;
+  max-width: 360px;
+  background: var(--panel);
+  border: var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--glow-panel);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  text-align: center;
+}
+
+.leave-confirm-text {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--text);
+}
+
+.leave-confirm-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Кнопка «Выйти» — второстепенная, но красная (--danger), чтобы было
+   видно, что действие ведёт к выходу из игры. */
+.danger-btn {
+  height: 60px;
+  width: 100%;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--danger);
+  background: transparent;
+  border: 2px solid var(--danger);
+  border-radius: var(--radius-s);
+}
+
+.danger-btn:active {
+  transform: translateY(2px);
 }

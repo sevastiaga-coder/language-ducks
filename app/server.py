@@ -50,11 +50,6 @@ MAX_REQUEST_BODY_BYTES = 8192
 # Сколько секунд ждём после последнего ответа, прежде чем показать
 # результаты — чтобы последний игрок успел убрать палец от экрана.
 REVEAL_DELAY_SECONDS = 2.0
-# Каждый экран (и телефон, и большой экран) опрашивает сервер раз в
-# секунду — значит если от игрока дольше этого времени не было ни
-# одного запроса, его вкладка закрыта и он ушёл навсегда, а не просто
-# задумался над ответом (см. touch_player и prune_inactive_players).
-LAST_SEEN_TIMEOUT_SECONDS = 30
 # Сколько секунд держим заставку между этапами («Этап 2. Обманка») на
 # экране ноутбука, прежде чем сама включится первое слово «Обманки» —
 # чтобы за столом успели понять, что правила игры поменялись.
@@ -256,89 +251,76 @@ def handle_join(payload):
         if player["name"].lower() == name.lower():
             return {"ok": False, "error": "Такое имя уже занято, выбери другое"}
 
-    new_player = {"id": uuid.uuid4().hex, "name": name, "score": 0, "last_seen": time.time()}
+    new_player = {"id": uuid.uuid4().hex, "name": name, "score": 0}
     game_state["players"].append(new_player)
     return {"ok": True, "id": new_player["id"], "name": new_player["name"]}
 
 
-def touch_player(player_id):
-    """Запоминает, что от этого игрока только что пришёл запрос — его
-    телефон на связи. Используется в prune_inactive_players, чтобы
-    отличить игрока, который просто задумался (телефон всё равно
-    опрашивает сервер раз в секунду), от того, кто закрыл вкладку и
-    больше не спрашивает вовсе."""
-    if not player_id:
-        return
-    for player in game_state["players"]:
-        if player["id"] == player_id:
-            player["last_seen"] = time.time()
-            return
+def remove_player(player_id):
+    """Убирает одного игрока из игры — по кнопке выхода на телефоне
+    (/api/leave). Чистит его незавершённые ответ «Перевода», придумку и
+    голос «Обманки», чтобы игра не ждала того, кого уже нет. Ведущим
+    остаётся первый из оставшихся — для этого не нужно ничего
+    специального, ведущий и так определяется как первый элемент списка
+    players.
 
-
-def prune_inactive_players():
-    """Убирает игроков, от которых дольше LAST_SEEN_TIMEOUT_SECONDS не
-    было ни одного запроса — значит вкладка закрыта и телефон ушёл
-    навсегда. Ведущим остаётся первый из оставшихся — для этого не
-    нужно ничего специального, ведущий и так определяется как первый
-    элемент списка players.
+    Неизвестный или пустой id — не ошибка, просто ничего не происходит:
+    сервер открыт в интернет, и чужому запросу нельзя верить на слово.
 
     Если ушли вообще все — партия сбрасывается в чистое лобби
     (reset_to_lobby), чтобы следующая компания начала с нуля без
-    перезапуска сервера.
+    перезапуска сервера. Настройки длительности показа результатов при
+    этом не сбрасываются — reset_to_lobby их не трогает.
 
-    Если партия идёт и ждёт ответа/придумки/голоса от всех — убираем
-    из соответствующего словаря запись ушедшего игрока и, если
-    оставшиеся к этому моменту уже успели ответить все, отмечаем
-    момент прямо сейчас — иначе игра ждала бы ушедшего вечно.
+    Если партия идёт и ждёт ответа/придумки/голоса от всех — и после
+    удаления оставшиеся уже успели прислать всё, отмечаем момент прямо
+    сейчас, иначе игра ждала бы ушедшего вечно.
     """
-    now = time.time()
-    active_players = [
-        player for player in game_state["players"]
-        if now - player.get("last_seen", now) <= LAST_SEEN_TIMEOUT_SECONDS
-    ]
-    if len(active_players) == len(game_state["players"]):
-        return
-
-    active_ids = {player["id"] for player in active_players}
-    removed_ids = {player["id"] for player in game_state["players"]} - active_ids
-    game_state["players"] = active_players
-
-    if not active_players:
-        reset_to_lobby()
-        return
-
-    for removed_id in removed_ids:
-        game_state["answers"].pop(removed_id, None)
-        game_state["fibs"].pop(removed_id, None)
-        game_state["votes"].pop(removed_id, None)
-
-    if game_state["phase"] != "playing":
-        return
-
-    if game_state["stage"] == "translate":
-        if (
-            game_state["all_answered_time"] is None
-            and len(game_state["answers"]) >= len(game_state["players"])
+    with state_lock:
+        if not player_id or not any(
+            player["id"] == player_id for player in game_state["players"]
         ):
-            game_state["all_answered_time"] = now
-    elif game_state["stage"] == "trick" and game_state["trick_stage"] == "collecting":
-        if (
-            game_state["fibs_all_time"] is None
-            and len(game_state["fibs"]) >= len(game_state["players"])
-        ):
-            game_state["fibs_all_time"] = now
-    elif game_state["stage"] == "trick" and game_state["trick_stage"] == "voting":
-        if (
-            game_state["votes_all_time"] is None
-            and len(game_state["votes"]) >= len(game_state["players"])
-        ):
-            game_state["votes_all_time"] = now
+            return
+
+        game_state["players"] = [
+            player for player in game_state["players"] if player["id"] != player_id
+        ]
+        game_state["answers"].pop(player_id, None)
+        game_state["fibs"].pop(player_id, None)
+        game_state["votes"].pop(player_id, None)
+
+        if not game_state["players"]:
+            reset_to_lobby()
+            return
+
+        if game_state["phase"] != "playing":
+            return
+
+        now = time.time()
+        if game_state["stage"] == "translate":
+            if (
+                game_state["all_answered_time"] is None
+                and len(game_state["answers"]) >= len(game_state["players"])
+            ):
+                game_state["all_answered_time"] = now
+        elif game_state["stage"] == "trick" and game_state["trick_stage"] == "collecting":
+            if (
+                game_state["fibs_all_time"] is None
+                and len(game_state["fibs"]) >= len(game_state["players"])
+            ):
+                game_state["fibs_all_time"] = now
+        elif game_state["stage"] == "trick" and game_state["trick_stage"] == "voting":
+            if (
+                game_state["votes_all_time"] is None
+                and len(game_state["votes"]) >= len(game_state["players"])
+            ):
+                game_state["votes_all_time"] = now
 
 
 def reset_to_lobby():
     """Сбрасывает игру в чистое лобби: ни игроков, ни очков, ни слов,
-    ни ответов — всё заново. Вызывается из prune_inactive_players,
-    когда в игре не осталось ни одного игрока на связи."""
+    ни ответов — всё заново. Вызывается из remove_player, когда в игре
+    не осталось ни одного игрока."""
     game_state["players"] = []
     game_state["phase"] = "lobby"
     game_state["stage"] = None
@@ -582,7 +564,6 @@ def advance_game():
     и телефоны могли бы разойтись во времени.
     """
     with state_lock:
-        prune_inactive_players()
         if game_state["phase"] != "playing":
             return
         if game_state["stage"] == "translate":
@@ -794,6 +775,17 @@ def handle_restart(payload):
     return {"ok": True}
 
 
+def handle_leave(payload):
+    """Обрабатывает выход игрока по кнопке (крестик на телефоне).
+
+    Просто убирает игрока — вся логика (чистка ответов/придумок/голосов,
+    передача ведущего следующему, сброс в чистое лобби, если ушли все)
+    сделана в remove_player.
+    """
+    remove_player(payload.get("id"))
+    return {"ok": True}
+
+
 def handle_settings(payload):
     """Обрабатывает изменение настроек показа результатов с большого экрана
     (шестерёнка на Л1, Л2/Л3 и Л4/Л5/Л6 её не видят).
@@ -928,11 +920,6 @@ class GameRequestHandler(BaseHTTPRequestHandler):
         if path == "/api/info":
             query = parse_qs(parsed_url.query)
             player_id = (query.get("id") or [None])[0]
-            # Отмечаем игрока на связи до того, как advance_game может
-            # решить, что кто-то ушёл — иначе собственный же запрос
-            # игрока не спас бы его от удаления в редкий момент на
-            # границе LAST_SEEN_TIMEOUT_SECONDS.
-            touch_player(player_id)
             advance_game()
 
             is_host = bool(
@@ -1187,6 +1174,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             "/api/vote": handle_vote,
             "/api/restart": handle_restart,
             "/api/settings": handle_settings,
+            "/api/leave": handle_leave,
         }
         handler = handlers.get(path)
         if handler is None:
@@ -1194,14 +1182,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             return
 
         payload = self.read_json_body()
-        # Игрок на связи, даже если этот запрос — не /api/info: отмечаем
-        # его и по присланному id (заходит заново, отвечает, голосует...),
-        # и по id из ответа — единственный случай, когда это разные id,
-        # это только что созданный игрок в handle_join.
-        touch_player(payload.get("id"))
         result = handler(payload)
-        if isinstance(result, dict):
-            touch_player(result.get("id"))
         self.send_json(result)
 
 
