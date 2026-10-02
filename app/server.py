@@ -839,15 +839,36 @@ def get_local_ip():
 LOCAL_IP = get_local_ip()
 
 
-def get_display_address():
+def public_host_from_request(host):
+    """Если большой экран открыли по настоящему имени сайта (например,
+    languducks-production.up.railway.app) — возвращаем это имя. Для
+    localhost, голых IP-адресов и домашних имён .local — None: значит
+    игра запущена дома, и показывать надо адрес ноутбука в Wi-Fi."""
+    if not host:
+        return None
+    host = host.strip().lower()
+    if len(host) > 100 or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789.-:" for c in host):
+        return None
+    name = host.split(":")[0]
+    if name in ("localhost", "") or name.endswith(".local"):
+        return None
+    if all(part.isdigit() for part in name.split(".")):
+        return None
+    if host.endswith(":443") or host.endswith(":80"):
+        host = host.rsplit(":", 1)[0]
+    return host
+
+
+def get_display_address(request_host=None):
     """Адрес, который видят игроки на большом экране, чтобы набрать его
-    на телефоне. Если сервер запущен в интернете на Railway — там есть
-    переменная окружения RAILWAY_PUBLIC_DOMAIN, и мы показываем её: этот
-    адрес работает из любой сети, не только из домашнего Wi-Fi. Если
-    переменной нет — значит игра дома, и, как раньше, показываем адрес
-    ноутбука в локальной сети."""
+    на телефоне. В интернете это имя сайта: берём его из переменной
+    RAILWAY_PUBLIC_DOMAIN, а если её нет — из адреса, по которому открыли
+    большой экран. Дома, как раньше, показываем адрес ноутбука в Wi-Fi."""
     if PUBLIC_DOMAIN:
         return PUBLIC_DOMAIN
+    public_host = public_host_from_request(request_host)
+    if public_host:
+        return public_host
     return "{}:{}".format(LOCAL_IP, PORT)
 
 
@@ -1076,7 +1097,9 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                     my_points = my_guess_points + my_fooled_points
 
             self.send_json({
-                "address": get_display_address(),
+                "address": get_display_address(
+                    self.headers.get("X-Forwarded-Host") or self.headers.get("Host")
+                ),
                 "translateResultSeconds": int(game_state["translate_result_seconds"]),
                 "trickResultSeconds": int(game_state["trick_result_seconds"]),
                 "playerCount": len(game_state["players"]),
