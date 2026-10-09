@@ -1061,8 +1061,10 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                         "isReal": is_real,
                         "authorName": None if is_real else id_to_name.get(owner_id),
                         "voterNames": voter_names,
-                        "points": (POINTS_TRICK_GUESS if is_real else POINTS_TRICK_FOOLED)
-                        if voter_names else 0,
+                        # Настоящий перевод: каждый угадавший получил POINTS_TRICK_GUESS.
+                        # Выдумка: автор получил POINTS_TRICK_FOOLED за каждого попавшегося.
+                        "points": (POINTS_TRICK_GUESS if voter_names else 0) if is_real
+                        else POINTS_TRICK_FOOLED * len(voter_names),
                     })
 
                 if player_id and player_id in game_state["votes"]:
