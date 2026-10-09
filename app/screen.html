@@ -30,6 +30,13 @@
         <button class="settings-option" type="button" data-seconds="15">15 сек</button>
       </div>
     </div>
+    <div class="settings-row">
+      <span class="settings-label">Набор слов</span>
+      <div class="settings-options" id="word-pack-options">
+        <button class="settings-option" type="button" data-pack="classic">Классический</button>
+        <button class="settings-option" type="button" data-pack="crazy">Сумасшедший</button>
+      </div>
+    </div>
   </div>
 
   <div class="join-panel">
@@ -297,6 +304,9 @@
     document.querySelectorAll("#trick-seconds-options .settings-option").forEach((btn) => {
       btn.classList.toggle("selected", Number(btn.dataset.seconds) === info.trickResultSeconds);
     });
+    document.querySelectorAll("#word-pack-options .settings-option").forEach((btn) => {
+      btn.classList.toggle("selected", btn.dataset.pack === info.wordPack);
+    });
   }
 
   function setupSettingsButtons(containerId, field) {
@@ -317,6 +327,17 @@
   }
   setupSettingsButtons("translate-seconds-options", "translateResultSeconds");
   setupSettingsButtons("trick-seconds-options", "trickResultSeconds");
+
+  // Набор слов — те же кнопки, но значение не число секунд, а название набора.
+  document.querySelectorAll("#word-pack-options .settings-option").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btn.parentElement.querySelectorAll(".settings-option").forEach((other) => {
+        other.classList.remove("selected");
+      });
+      btn.classList.add("selected");
+      sendSettings({ wordPack: btn.dataset.pack }).catch(() => {});
+    });
+  });
 
   // Крякаем по разу за каждое новое имя, появившееся в списке галочек,
   // — не на каждый опрос сервера и не повторно для уже отмеченных.

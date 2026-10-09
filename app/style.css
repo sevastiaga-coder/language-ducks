@@ -942,6 +942,16 @@ body {
   gap: 8px;
 }
 
+/* Три строки + 10 игроков в окне ~757px: пока панель открыта, соседние
+   блоки на Л1 чуть плотнее, чтобы всё помещалось без прокрутки. */
+.screen:has(#settings-panel:not([hidden])) {
+  gap: 12px;
+}
+
+.screen:has(#settings-panel:not([hidden])) .join-panel {
+  padding: 14px 28px;
+}
+
 .settings-row {
   display: flex;
   align-items: center;

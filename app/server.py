@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from words import TRICK_WORDS, WORDS
+from words import CRAZY_TRICK_WORDS, CRAZY_WORDS, TRICK_WORDS, WORDS
 
 # Дома порт всегда 8000 (см. Играть.command). В интернете (Railway)
 # площадка сама решает, какой порт слушать, и сообщает его через
@@ -65,6 +65,10 @@ DEFAULT_TRICK_RESULT_SECONDS = 15.0
 # Разрешённые значения для смены длительности показа результатов — любое
 # другое число из /api/settings молча игнорируем (см. handle_settings).
 ALLOWED_RESULT_SECONDS = (5, 10, 15)
+# Наборы слов (настройка «Набор слов» на большом экране). Любое другое
+# значение из /api/settings молча игнорируем (см. handle_settings).
+WORD_PACKS = ("classic", "crazy")
+DEFAULT_WORD_PACK = "classic"
 # Сколько очков даёт правильный ответ. Неверный или пропущенный — 0.
 POINTS_CORRECT = 100
 # Очки за «Обманку» (решение босса): столько получает тот, кто нашёл
@@ -135,6 +139,10 @@ POINTS_TRICK_FOOLED = 100
 # здесь, не сбрасываются ни в reset_to_lobby, ни в handle_restart —
 # только перезапуском сервера, как и положено настройке, а не состоянию
 # одной партии.
+# word_pack — выбранный набор слов (настройка, тоже живёт до перезапуска).
+# game_word_pack — набор, с которым началась текущая партия: берётся из
+# word_pack в handle_start, чтобы смена настройки посреди партии не
+# подменила слова «Обманки» на полпути.
 game_state = {
     "players": [],
     "phase": "lobby",
@@ -159,6 +167,8 @@ game_state = {
     "trick_scored_this_word": False,
     "translate_result_seconds": DEFAULT_TRANSLATE_RESULT_SECONDS,
     "trick_result_seconds": DEFAULT_TRICK_RESULT_SECONDS,
+    "word_pack": DEFAULT_WORD_PACK,
+    "game_word_pack": DEFAULT_WORD_PACK,
 }
 
 # Защищает переход к следующему слову от гонки: экран и несколько
@@ -344,7 +354,7 @@ def reset_to_lobby():
     game_state["trick_scored_this_word"] = False
 
 
-def pick_round_words(previous_words):
+def pick_round_words(previous_words, word_pack=DEFAULT_WORD_PACK):
     """Выбирает 5 слов на партию: по одному случайному слову с каждого
     из 5 языков. Так слова в партии точно из разных языков, а заодно
     не может попасться два слова с одинаковым правильным переводом.
@@ -354,12 +364,13 @@ def pick_round_words(previous_words):
     чтобы партии не повторялись. Если после этого выбирать не из чего
     (слов в языке мало), просто берём из всех слов языка — без ошибок.
     """
-    languages = sorted({w["language"] for w in WORDS})
+    all_words = CRAZY_WORDS if word_pack == "crazy" else WORDS
+    languages = sorted({w["language"] for w in all_words})
     previous_texts = {w["word"] for w in previous_words}
     chosen = []
     used_answers = set()
     for language in languages:
-        candidates = [w for w in WORDS
+        candidates = [w for w in all_words
                       if w["language"] == language and w["answer"] not in used_answers]
         fresh_candidates = [w for w in candidates if w["word"] not in previous_texts]
         word = random.choice(fresh_candidates or candidates)
@@ -369,18 +380,19 @@ def pick_round_words(previous_words):
     return chosen
 
 
-def pick_trick_words(previous_trick_words):
+def pick_trick_words(previous_trick_words, word_pack=DEFAULT_WORD_PACK):
     """Выбирает 3 слова на этап «Обманка»: по одному случайному слову
     с каждого из 3 языков (финский, норвежский, исландский).
 
     previous_trick_words — слова прошлой партии, тем же способом, что и
     в pick_round_words: у каждого языка по 10 слов, одно было в прошлый
     раз — выбираем из оставшихся девяти, чтобы партии не повторялись."""
-    languages = sorted({w["language"] for w in TRICK_WORDS})
+    all_words = CRAZY_TRICK_WORDS if word_pack == "crazy" else TRICK_WORDS
+    languages = sorted({w["language"] for w in all_words})
     previous_texts = {w["word"] for w in previous_trick_words}
     chosen = []
     for language in languages:
-        candidates = [w for w in TRICK_WORDS if w["language"] == language]
+        candidates = [w for w in all_words if w["language"] == language]
         fresh_candidates = [w for w in candidates if w["word"] not in previous_texts]
         chosen.append(random.choice(fresh_candidates or candidates))
     random.shuffle(chosen)
@@ -407,7 +419,8 @@ def handle_start(payload):
     game_state["phase"] = "playing"
     game_state["stage"] = "translate"
     game_state["intermission_time"] = None
-    game_state["words"] = pick_round_words(game_state["previous_words"])
+    game_state["game_word_pack"] = game_state["word_pack"]
+    game_state["words"] = pick_round_words(game_state["previous_words"], game_state["game_word_pack"])
     game_state["word_index"] = 0
     game_state["answers"] = {}
     game_state["all_answered_time"] = None
@@ -609,7 +622,8 @@ def advance_translate():
             # чтобы они были готовы, как только заставка закончится.
             game_state["stage"] = "intermission"
             game_state["intermission_time"] = time.time()
-            game_state["trick_words"] = pick_trick_words(game_state["previous_trick_words"])
+            game_state["trick_words"] = pick_trick_words(
+                game_state["previous_trick_words"], game_state["game_word_pack"])
 
 
 def advance_intermission():
@@ -805,6 +819,12 @@ def handle_settings(payload):
     trick_seconds = payload.get("trickResultSeconds")
     if trick_seconds in ALLOWED_RESULT_SECONDS:
         game_state["trick_result_seconds"] = float(trick_seconds)
+
+    # Набор слов: только "classic" или "crazy". Применяется со следующей
+    # партии (см. game_word_pack) — слова текущей партии не меняются.
+    word_pack = payload.get("wordPack")
+    if word_pack in WORD_PACKS:
+        game_state["word_pack"] = word_pack
 
     return {"ok": True}
 
@@ -1091,6 +1111,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 ),
                 "translateResultSeconds": int(game_state["translate_result_seconds"]),
                 "trickResultSeconds": int(game_state["trick_result_seconds"]),
+                "wordPack": game_state["word_pack"],
                 "playerCount": len(game_state["players"]),
                 "players": [player["name"] for player in game_state["players"]],
                 "phase": game_state["phase"],
