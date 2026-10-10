@@ -88,3 +88,45 @@ async function sendSettings(payload) {
   });
   return response.json();
 }
+
+// Плавный обратный отсчёт между опросами сервера. Сервер даёт целые
+// секунды (с округлением вверх), поэтому момент окончания — это
+// «сейчас + секунды» с запасом до секунды. Каждый новый опрос только
+// уточняет его в меньшую сторону (min), а цифра идёт строго вниз и не
+// чаще одного шага за тик: без прыжков вверх и без пропусков.
+// onTick(секунды) вызывается при каждой смене цифры; null — таймера нет.
+function createCountdown(onTick) {
+  let stepKey = null;
+  let endMs = null;
+  let shown = null;
+
+  setInterval(() => {
+    if (endMs === null) {
+      return;
+    }
+    const target = Math.max(0, Math.ceil((endMs - Date.now()) / 1000));
+    if (target < shown) {
+      shown -= 1;
+      onTick(shown);
+    }
+  }, 200);
+
+  return function update(newStepKey, secondsLeft) {
+    if (secondsLeft === null) {
+      stepKey = null;
+      endMs = null;
+      shown = null;
+      onTick(null);
+      return;
+    }
+    const newEnd = Date.now() + secondsLeft * 1000;
+    if (newStepKey !== stepKey || endMs === null) {
+      stepKey = newStepKey;
+      endMs = newEnd;
+      shown = secondsLeft;
+      onTick(shown);
+    } else {
+      endMs = Math.min(endMs, newEnd);
+    }
+  };
+}

@@ -196,16 +196,18 @@
   // когда слово реально сменилось, иначе кнопки мигали бы каждую секунду.
   let lastVoteListKey = null;
 
-  // Остаток времени: меняем только текст цифры, экран не перерисовываем.
+  // Цифру ведёт createCountdown (app.js); здесь только выводим текст.
   // Последние 10 секунд — класс urgent (жёлтый, пульс).
-  function setTimer(id, info) {
-    const el = document.getElementById(id);
-    const text = info.secondsLeft === null ? "" : String(info.secondsLeft);
-    if (el.textContent !== text) {
-      el.textContent = text;
-    }
-    el.classList.toggle("urgent", info.secondsLeft !== null && info.secondsLeft <= 10);
-  }
+  const updateCountdown = createCountdown((seconds) => {
+    ["answer-timer", "vote-timer"].forEach((id) => {
+      const el = document.getElementById(id);
+      const text = seconds === null ? "" : String(seconds);
+      if (el.textContent !== text) {
+        el.textContent = text;
+      }
+      el.classList.toggle("urgent", seconds !== null && seconds <= 10);
+    });
+  });
 
   function hideAllViews() {
     // Логотип показываем только на экране входа (Т1) — на остальных
@@ -286,7 +288,6 @@
   function renderAnswerView(info) {
     hideAllViews();
     answerView.hidden = false;
-    setTimer("answer-timer", info);
     const isTrick = info.stage === "trick";
     currentStage = info.stage;
     answerQuestionNumber.textContent = "Слово " + info.wordIndex + " из " + info.wordTotal;
@@ -365,7 +366,6 @@
   function renderVoteView(info) {
     hideAllViews();
     voteView.hidden = false;
-    setTimer("vote-timer", info);
     voteTaskWord.textContent = info.word || "";
     voteTaskWord.classList.toggle("cyr", isCyrillic(info.word));
     voteTaskLanguage.textContent = info.wordLanguage ? "язык: " + info.wordLanguage : "";
@@ -474,6 +474,8 @@
   // Решает, какой экран телефона показать прямо сейчас, по свежим
   // данным с сервера.
   function renderPhase(info) {
+    updateCountdown(info.stage + "|" + info.trickStage + "|" + info.wordIndex,
+      info.phase === "playing" ? info.secondsLeft : null);
     if (info.phase === "final") {
       renderFinalView(info);
       return;

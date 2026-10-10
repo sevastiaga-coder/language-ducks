@@ -156,9 +156,6 @@
   let lastTrickRevealKey = null;
   let lastFinalKey = null;
   let lastPhase = null;
-  // Обратный отсчёт: последняя увиденная секунда этого шага.
-  let countdownStepKey = null;
-  let lastSeenSecond = null;
 
   // --- Звук утки (только этот экран, не телефон) ---
   // Браузер не даёт играть звук, пока по странице ни разу не кликнули —
@@ -579,50 +576,33 @@
     return names.slice(0, 5).join(", ") + " и ещё " + (names.length - 5);
   }
 
-  // Показывает остаток времени: меняется только текст цифры, весь экран
-  // не перерисовывается. Последние 10 секунд — класс urgent (жёлтый, пульс).
-  function setTimer(id, info) {
-    const el = document.getElementById(id);
-    const text = info.secondsLeft === null ? "" : String(info.secondsLeft);
-    if (el.textContent !== text) {
-      el.textContent = text;
+  // Цифру ведёт createCountdown (app.js) — сама, несколько раз в секунду;
+  // здесь только выводим текст и крякаем. Каждая цифра 10…1 появляется
+  // ровно один раз, поэтому и кряк на неё ровно один.
+  function showTimers(seconds) {
+    ["word-timer", "fib-timer", "vote-timer"].forEach((id) => {
+      const el = document.getElementById(id);
+      const text = seconds === null ? "" : String(seconds);
+      if (el.textContent !== text) {
+        el.textContent = text;
+      }
+      el.classList.toggle("urgent", seconds !== null && seconds <= 10);
+    });
+    if (seconds !== null && seconds >= 1 && seconds <= 10) {
+      playQuack();
     }
-    el.classList.toggle("urgent", info.secondsLeft !== null && info.secondsLeft <= 10);
   }
+  const updateCountdown = createCountdown(showTimers);
 
-  // На последних 10 секундах шага крякаем по разу в секунду. Помним
-  // последнюю увиденную секунду: повторный опрос с тем же остатком не
-  // крякает, а опоздавший опрос добирает пропущенные секунды.
   function quackCountdown(info) {
     if (info.phase !== "playing") {
-      countdownStepKey = null;
-      lastSeenSecond = null;
+      updateCountdown("", null);
       return;
     }
-    const stepKey = info.stage + "|" + info.trickStage + "|" + info.wordIndex;
-    if (stepKey !== countdownStepKey) {
-      countdownStepKey = stepKey;
-      lastSeenSecond = null;
-    }
-    const left = info.secondsLeft;
-    if (left === null) {
-      return;
-    }
-    if (lastSeenSecond === null) {
-      // Первый опрос шага (или страницу открыли посреди отсчёта).
-      if (left >= 1 && left <= 10) {
-        playQuack();
-      }
-    } else if (left < lastSeenSecond) {
-      for (let second = Math.min(lastSeenSecond - 1, 10); second >= Math.max(left, 1); second--) {
-        playQuack();
-      }
-    }
-    lastSeenSecond = left;
+    updateCountdown(info.stage + "|" + info.trickStage + "|" + info.wordIndex, info.secondsLeft);
   }
 
   function renderWord(info) {
-    setTimer("word-timer", info);
     document.getElementById("question-number").textContent =
       "Слово " + info.wordIndex + " из " + info.wordTotal;
     const wordEl = document.getElementById("word-text");
@@ -657,7 +637,6 @@
   }
 
   function renderFib(info) {
-    setTimer("fib-timer", info);
     document.getElementById("fib-question-number").textContent =
       "Слово " + info.wordIndex + " из " + info.wordTotal;
     const wordEl = document.getElementById("fib-word");
@@ -692,7 +671,6 @@
   }
 
   function renderVote(info) {
-    setTimer("vote-timer", info);
     const wordEl = document.getElementById("vote-word");
     wordEl.textContent = info.word || "";
     wordEl.classList.toggle("cyr", isCyrillic(info.word));
