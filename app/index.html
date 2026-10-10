@@ -50,6 +50,7 @@
 
   <div id="answer-view" class="answer-view" hidden>
     <div class="waiting-name">Ты играешь как <span id="answer-player-name"></span></div>
+    <div class="timer phone-timer" id="answer-timer"></div>
     <div class="question-number" id="answer-question-number"></div>
     <div class="task-line">Переведи: <span id="task-word" class="task-word"></span></div>
     <div class="task-language" id="task-language"></div>
@@ -61,6 +62,7 @@
 
   <div id="vote-view" class="answer-view" hidden>
     <div class="waiting-name">Ты играешь как <span id="vote-player-name"></span></div>
+    <div class="timer phone-timer" id="vote-timer"></div>
     <div class="task-line">Где настоящий перевод: <span id="vote-task-word" class="task-word"></span></div>
     <div class="task-language" id="vote-task-language"></div>
     <div class="vote-options-list" id="vote-options-list"></div>
@@ -68,8 +70,8 @@
 
   <div id="vote-submitted-view" class="waiting-view" hidden>
     <div class="waiting-name">Ты играешь как <span id="vote-submitted-player-name"></span></div>
-    <div class="submitted-check">✓</div>
-    <div class="waiting-text">Голос принят, жди остальных</div>
+    <div class="submitted-check" id="vote-submitted-check">✓</div>
+    <div class="waiting-text" id="vote-submitted-text">Голос принят, жди остальных</div>
   </div>
 
   <div id="trick-result-view" class="waiting-view" hidden>
@@ -194,6 +196,17 @@
   // когда слово реально сменилось, иначе кнопки мигали бы каждую секунду.
   let lastVoteListKey = null;
 
+  // Остаток времени: меняем только текст цифры, экран не перерисовываем.
+  // Последние 10 секунд — класс urgent (жёлтый, пульс).
+  function setTimer(id, info) {
+    const el = document.getElementById(id);
+    const text = info.secondsLeft === null ? "" : String(info.secondsLeft);
+    if (el.textContent !== text) {
+      el.textContent = text;
+    }
+    el.classList.toggle("urgent", info.secondsLeft !== null && info.secondsLeft <= 10);
+  }
+
   function hideAllViews() {
     // Логотип показываем только на экране входа (Т1) — на остальных
     // экранах он спорит за внимание с главным содержимым.
@@ -273,6 +286,7 @@
   function renderAnswerView(info) {
     hideAllViews();
     answerView.hidden = false;
+    setTimer("answer-timer", info);
     const isTrick = info.stage === "trick";
     currentStage = info.stage;
     answerQuestionNumber.textContent = "Слово " + info.wordIndex + " из " + info.wordTotal;
@@ -305,6 +319,16 @@
     submittedAnsweredCount.textContent =
       (isTrick ? "Придумали " : "Ответили ") + info.answeredCount + " из " + info.playerCount;
 
+    if (!info.revealed && !info.myAnswered) {
+      // Время вышло, а ответа нет.
+      submittedCheck.hidden = true;
+      submittedStatus.textContent = "Время вышло";
+      pointsEarned.hidden = true;
+      myScoreLine.hidden = true;
+      myRankLine.hidden = true;
+      return;
+    }
+
     if (!info.revealed) {
       submittedCheck.hidden = false;
       submittedCheck.textContent = "✓";
@@ -325,7 +349,7 @@
     pointsEarned.classList.toggle("zero", info.myPoints === 0);
 
     if (!info.myAnswered) {
-      submittedStatus.textContent = "Ты не успел ответить";
+      submittedStatus.textContent = "Время вышло";
     } else if (info.myCorrect) {
       submittedStatus.textContent = "Ты угадал!";
     } else {
@@ -341,6 +365,7 @@
   function renderVoteView(info) {
     hideAllViews();
     voteView.hidden = false;
+    setTimer("vote-timer", info);
     voteTaskWord.textContent = info.word || "";
     voteTaskWord.classList.toggle("cyr", isCyrillic(info.word));
     voteTaskLanguage.textContent = info.wordLanguage ? "язык: " + info.wordLanguage : "";
@@ -386,6 +411,9 @@
   function renderVoteSubmittedView(info) {
     hideAllViews();
     voteSubmittedView.hidden = false;
+    document.getElementById("vote-submitted-check").hidden = !info.myVoted;
+    document.getElementById("vote-submitted-text").textContent =
+      info.myVoted ? "Голос принят, жди остальных" : "Время вышло";
   }
 
   // «За обманутых (1): +100» звучит как техническая метка, а не как
@@ -414,9 +442,13 @@
     trickPointsEarned.textContent = "+" + info.myPoints;
     trickPointsEarned.classList.toggle("zero", info.myPoints === 0);
 
-    trickResultStatus.textContent = info.myVoteCorrect
-      ? "Ты нашёл настоящий перевод!"
-      : "Мимо! Тебя обманул " + info.myFooledByName;
+    if (!info.myVoted) {
+      trickResultStatus.textContent = "Время вышло";
+    } else if (info.myVoteCorrect) {
+      trickResultStatus.textContent = "Ты нашёл настоящий перевод!";
+    } else {
+      trickResultStatus.textContent = "Мимо! Тебя обманул " + info.myFooledByName;
+    }
 
     trickGuessLine.textContent = "За угадывание: +" + info.myGuessPoints;
     trickFooledLine.textContent = formatFooledLine(info.myFooledNames, info.myFooledPoints);
@@ -452,12 +484,12 @@
       } else if (info.stage === "trick" && info.trickRevealed) {
         renderTrickResultView(info);
       } else if (info.stage === "trick" && info.trickStage === "voting") {
-        if (info.myVoted) {
+        if (info.myVoted || info.secondsLeft === 0) {
           renderVoteSubmittedView(info);
         } else {
           renderVoteView(info);
         }
-      } else if (info.myAnswered || info.revealed) {
+      } else if (info.myAnswered || info.revealed || info.secondsLeft === 0) {
         renderSubmittedView(info);
       } else {
         renderAnswerView(info);

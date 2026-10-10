@@ -14,6 +14,7 @@ Language Ducks — маленький сервер для игры.
 """
 
 import json
+import math
 import os
 import random
 import socket
@@ -47,6 +48,12 @@ MAX_ANSWER_LENGTH = 40
 # (см. read_json_body) — наши сообщения (имя, ответ, голос) маленькие,
 # а большое тело — либо ошибка, либо кто-то пытается забить память.
 MAX_REQUEST_BODY_BYTES = 8192
+# Сколько секунд даём на каждый шаг. Время считает сервер, а экраны
+# только показывают остаток (см. seconds_left). Вышло время — шаг
+# закрывается сам с теми ответами, что есть.
+TRANSLATE_ANSWER_SECONDS = 40  # ответ на слово в «Переводе»
+TRICK_FIB_SECONDS = 60         # придумывание в «Обманке»
+TRICK_VOTE_SECONDS = 30        # голосование в «Обманке»
 # Сколько секунд ждём после последнего ответа, прежде чем показать
 # результаты — чтобы последний игрок успел убрать палец от экрана.
 REVEAL_DELAY_SECONDS = 2.0
@@ -90,6 +97,8 @@ POINTS_TRICK_FOOLED = 100
 # между этапами. None, пока заставка не показывается. Нужен, чтобы
 # продержать её на экране ровно INTERMISSION_SECONDS и потом самой
 # переключить игру на первое слово «Обманки».
+# step_start — момент (time.time()), когда начался текущий шаг с
+# таймером (слово «Перевода», придумывание или голосование «Обманки»).
 # words — слова, выбранные на этап «Перевод» (5 штук, случайно из
 # words.py), в порядке, в котором их показывают.
 # word_index — индекс текущего слова в words (0 — первое слово).
@@ -148,6 +157,7 @@ game_state = {
     "phase": "lobby",
     "stage": None,
     "intermission_time": None,
+    "step_start": None,
     "words": [],
     "word_index": 0,
     "answers": {},
@@ -175,6 +185,42 @@ game_state = {
 # телефонов опрашивают сервер каждую секунду, и без замка два запроса
 # могли бы одновременно решить, что пора начислять очки или листать слово.
 state_lock = threading.Lock()
+
+
+def step_limit_seconds():
+    """Сколько секунд длится текущий шаг. None, если сейчас шага с
+    таймером нет (лобби, заставка, финал)."""
+    if game_state["phase"] != "playing":
+        return None
+    if game_state["stage"] == "translate":
+        return TRANSLATE_ANSWER_SECONDS
+    if game_state["stage"] == "trick":
+        if game_state["trick_stage"] == "collecting":
+            return TRICK_FIB_SECONDS
+        return TRICK_VOTE_SECONDS
+    return None
+
+
+def is_time_up():
+    """Вышло ли время текущего шага. Новые ответы, придумки и голоса
+    после этого не принимаем."""
+    limit = step_limit_seconds()
+    if limit is None or game_state["step_start"] is None:
+        return True
+    return time.time() - game_state["step_start"] >= limit
+
+
+def seconds_left(closed_time):
+    """Сколько целых секунд осталось на текущем шаге (не меньше 0).
+    closed_time — момент, когда шаг закрылся (ответили все или вышло
+    время). Если все успели раньше срока — таймер не нужен, None."""
+    limit = step_limit_seconds()
+    if limit is None or game_state["step_start"] is None:
+        return None
+    deadline = game_state["step_start"] + limit
+    if closed_time is not None and closed_time < deadline:
+        return None
+    return max(0, math.ceil(deadline - time.time()))
 
 
 def normalize_answer(text):
@@ -335,6 +381,7 @@ def reset_to_lobby():
     game_state["phase"] = "lobby"
     game_state["stage"] = None
     game_state["intermission_time"] = None
+    game_state["step_start"] = None
     game_state["words"] = []
     game_state["word_index"] = 0
     game_state["answers"] = {}
@@ -419,6 +466,7 @@ def handle_start(payload):
     game_state["phase"] = "playing"
     game_state["stage"] = "translate"
     game_state["intermission_time"] = None
+    game_state["step_start"] = time.time()
     game_state["game_word_pack"] = game_state["word_pack"]
     game_state["words"] = pick_round_words(game_state["previous_words"], game_state["game_word_pack"])
     game_state["word_index"] = 0
@@ -451,6 +499,9 @@ def handle_answer(payload):
 
     if game_state["phase"] != "playing" or game_state["stage"] != "translate":
         return {"ok": False, "error": "Сейчас не время отвечать"}
+
+    if is_time_up():
+        return {"ok": True}  # время вышло — тихий отказ
 
     player = None
     for candidate in game_state["players"]:
@@ -490,6 +541,9 @@ def handle_fib(payload):
         or game_state["trick_stage"] != "collecting"
     ):
         return {"ok": False, "error": "Сейчас не время придумывать"}
+
+    if is_time_up():
+        return {"ok": True}  # время вышло — тихий отказ
 
     player = None
     for candidate in game_state["players"]:
@@ -545,6 +599,9 @@ def handle_vote(payload):
     ):
         return {"ok": False, "error": "Сейчас не время голосовать"}
 
+    if is_time_up() or game_state["votes_all_time"] is not None:
+        return {"ok": True}  # время вышло или голосование закрыто — тихий отказ
+
     player = None
     for candidate in game_state["players"]:
         if candidate["id"] == player_id:
@@ -593,11 +650,14 @@ def advance_translate():
     следующему слову или (после последнего) — к финалу."""
     if not game_state["words"]:
         return
+    now = time.time()
     if game_state["all_answered_time"] is None:
-        return
+        # Время вышло — закрываем слово с теми ответами, что есть.
+        if now - game_state["step_start"] < TRANSLATE_ANSWER_SECONDS:
+            return
+        game_state["all_answered_time"] = now
 
     reveal_time = game_state["all_answered_time"] + REVEAL_DELAY_SECONDS
-    now = time.time()
     if now < reveal_time:
         return
 
@@ -615,6 +675,7 @@ def advance_translate():
             game_state["answers"] = {}
             game_state["all_answered_time"] = None
             game_state["scored_this_word"] = False
+            game_state["step_start"] = time.time()
         else:
             # «Перевод» закончился — не сразу «Обманка»: сначала
             # заставка (часть 12), чтобы за столом успели заметить, что
@@ -635,6 +696,7 @@ def advance_intermission():
     if time.time() - game_state["intermission_time"] >= INTERMISSION_SECONDS:
         game_state["stage"] = "trick"
         game_state["intermission_time"] = None
+        game_state["step_start"] = time.time()
 
 
 def advance_trick():
@@ -655,10 +717,14 @@ def advance_trick():
         return
 
     if game_state["trick_stage"] == "collecting":
+        now = time.time()
         if game_state["fibs_all_time"] is None:
-            return
+            # Время вышло — идём дальше с теми придумками, что есть.
+            if now - game_state["step_start"] < TRICK_FIB_SECONDS:
+                return
+            game_state["fibs_all_time"] = now
         reveal_time = game_state["fibs_all_time"] + REVEAL_DELAY_SECONDS
-        if time.time() < reveal_time:
+        if now < reveal_time:
             return
 
         current_word = game_state["trick_words"][game_state["trick_index"]]
@@ -669,16 +735,25 @@ def advance_trick():
         game_state["vote_options"] = [text for text, _owner in combined]
         game_state["vote_owners"] = [owner for _text, owner in combined]
         game_state["votes"] = {}
-        game_state["votes_all_time"] = None
+        # Никто ничего не придумал — голосовать не за что (остался бы один
+        # настоящий вариант). Пропускаем голосование: сразу итог.
+        if game_state["fibs"]:
+            game_state["votes_all_time"] = None
+        else:
+            game_state["votes_all_time"] = now - REVEAL_DELAY_SECONDS
         game_state["trick_scored_this_word"] = False
         game_state["trick_stage"] = "voting"
+        game_state["step_start"] = now
         return
 
     if game_state["trick_stage"] == "voting":
-        if game_state["votes_all_time"] is None:
-            return
-        reveal_time = game_state["votes_all_time"] + REVEAL_DELAY_SECONDS
         now = time.time()
+        if game_state["votes_all_time"] is None:
+            # Время вышло — раскрываем итог с теми голосами, что есть.
+            if now - game_state["step_start"] < TRICK_VOTE_SECONDS:
+                return
+            game_state["votes_all_time"] = now
+        reveal_time = game_state["votes_all_time"] + REVEAL_DELAY_SECONDS
         if now < reveal_time:
             return
 
@@ -689,6 +764,7 @@ def advance_trick():
         if now - reveal_time >= game_state["trick_result_seconds"]:
             if game_state["trick_index"] + 1 < len(game_state["trick_words"]):
                 game_state["trick_index"] += 1
+                game_state["step_start"] = time.time()
                 game_state["fibs"] = {}
                 game_state["fibs_all_time"] = None
                 game_state["trick_stage"] = "collecting"
@@ -987,11 +1063,12 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             my_correct = False
             if revealed:
                 for player in game_state["players"]:
-                    player_answer = game_state["answers"].get(player["id"])
+                    if player["id"] not in game_state["answers"]:
+                        continue  # не успел — в карточках его нет
+                    player_answer = game_state["answers"][player["id"]]
                     correct = is_answer_correct(current_word, player_answer)
                     results.append({
                         "name": player["name"],
-                        "answered": player["id"] in game_state["answers"],
                         "answer": player_answer,
                         "correct": correct,
                         "points": POINTS_CORRECT if correct else 0,
@@ -1105,7 +1182,15 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                     my_fooled_points = POINTS_TRICK_FOOLED * my_fooled_count
                     my_points = my_guess_points + my_fooled_points
 
+            if stage == "translate":
+                closed_time = game_state["all_answered_time"]
+            elif stage == "trick" and trick_stage == "collecting":
+                closed_time = game_state["fibs_all_time"]
+            else:
+                closed_time = game_state["votes_all_time"]
+
             self.send_json({
+                "secondsLeft": seconds_left(closed_time),
                 "address": get_display_address(
                     self.headers.get("X-Forwarded-Host") or self.headers.get("Host")
                 ),

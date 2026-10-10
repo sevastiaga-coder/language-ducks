@@ -51,6 +51,7 @@
   </div>
 
   <div class="playing-panel" id="playing-panel" hidden>
+    <div class="timer screen-timer" id="word-timer"></div>
     <div class="stage-badge">ЭТАП 1 · ПЕРЕВОД</div>
     <div class="question-number" id="question-number"></div>
     <div class="word" id="word-text"></div>
@@ -67,6 +68,7 @@
   </div>
 
   <div class="playing-panel" id="fib-panel" hidden>
+    <div class="timer screen-timer" id="fib-timer"></div>
     <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
     <div class="question-number" id="fib-question-number"></div>
     <div class="stage-hint">Придумай перевод, чтобы все поверили</div>
@@ -81,6 +83,7 @@
     <div class="vote-header">
       <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
       <div class="stage-hint">Где настоящий перевод?</div>
+      <div class="timer vote-timer" id="vote-timer"></div>
     </div>
     <div class="vote-word-row">
       <span class="reveal-word" id="vote-word"></span>
@@ -153,6 +156,9 @@
   let lastTrickRevealKey = null;
   let lastFinalKey = null;
   let lastPhase = null;
+  // Обратный отсчёт: последняя увиденная секунда этого шага.
+  let countdownStepKey = null;
+  let lastSeenSecond = null;
 
   // --- Звук утки (только этот экран, не телефон) ---
   // Браузер не даёт играть звук, пока по странице ни разу не кликнули —
@@ -400,6 +406,7 @@
         voteQuackedNames = new Set();
       }
       lastPhase = info.phase;
+      quackCountdown(info);
 
       // Кнопка и панель настроек существуют только на Л1 (сбор игроков) —
       // на игровых экранах их прячем, а открытую панель заодно закрываем,
@@ -572,7 +579,50 @@
     return names.slice(0, 5).join(", ") + " и ещё " + (names.length - 5);
   }
 
+  // Показывает остаток времени: меняется только текст цифры, весь экран
+  // не перерисовывается. Последние 10 секунд — класс urgent (жёлтый, пульс).
+  function setTimer(id, info) {
+    const el = document.getElementById(id);
+    const text = info.secondsLeft === null ? "" : String(info.secondsLeft);
+    if (el.textContent !== text) {
+      el.textContent = text;
+    }
+    el.classList.toggle("urgent", info.secondsLeft !== null && info.secondsLeft <= 10);
+  }
+
+  // На последних 10 секундах шага крякаем по разу в секунду. Помним
+  // последнюю увиденную секунду: повторный опрос с тем же остатком не
+  // крякает, а опоздавший опрос добирает пропущенные секунды.
+  function quackCountdown(info) {
+    if (info.phase !== "playing") {
+      countdownStepKey = null;
+      lastSeenSecond = null;
+      return;
+    }
+    const stepKey = info.stage + "|" + info.trickStage + "|" + info.wordIndex;
+    if (stepKey !== countdownStepKey) {
+      countdownStepKey = stepKey;
+      lastSeenSecond = null;
+    }
+    const left = info.secondsLeft;
+    if (left === null) {
+      return;
+    }
+    if (lastSeenSecond === null) {
+      // Первый опрос шага (или страницу открыли посреди отсчёта).
+      if (left >= 1 && left <= 10) {
+        playQuack();
+      }
+    } else if (left < lastSeenSecond) {
+      for (let second = Math.min(lastSeenSecond - 1, 10); second >= Math.max(left, 1); second--) {
+        playQuack();
+      }
+    }
+    lastSeenSecond = left;
+  }
+
   function renderWord(info) {
+    setTimer("word-timer", info);
     document.getElementById("question-number").textContent =
       "Слово " + info.wordIndex + " из " + info.wordTotal;
     const wordEl = document.getElementById("word-text");
@@ -607,6 +657,7 @@
   }
 
   function renderFib(info) {
+    setTimer("fib-timer", info);
     document.getElementById("fib-question-number").textContent =
       "Слово " + info.wordIndex + " из " + info.wordTotal;
     const wordEl = document.getElementById("fib-word");
@@ -641,6 +692,7 @@
   }
 
   function renderVote(info) {
+    setTimer("vote-timer", info);
     const wordEl = document.getElementById("vote-word");
     wordEl.textContent = info.word || "";
     wordEl.classList.toggle("cyr", isCyrillic(info.word));
@@ -735,7 +787,7 @@
     cardsContainer.classList.toggle("two-col", info.results.length > 4);
     info.results.forEach((result, index) => {
       const card = document.createElement("div");
-      card.className = "answer-card" + (!result.answered ? " missing" : result.correct ? " correct" : "");
+      card.className = "answer-card" + (result.correct ? " correct" : "");
       card.style.animationDelay = (index * 150) + "ms";
 
       const info_block = document.createElement("div");
@@ -745,7 +797,7 @@
       nameEl.textContent = result.name;
       const textEl = document.createElement("div");
       textEl.className = "answer-card-text";
-      textEl.textContent = result.answered ? result.answer : "нет ответа";
+      textEl.textContent = result.answer;
       info_block.appendChild(nameEl);
       info_block.appendChild(textEl);
 
@@ -754,9 +806,7 @@
 
       const verdict = document.createElement("div");
       verdict.className = "answer-card-verdict";
-      if (!result.answered) {
-        verdict.textContent = "НЕТ ОТВЕТА";
-      } else if (result.correct) {
+      if (result.correct) {
         verdict.textContent = "ВЕРНО";
       }
 

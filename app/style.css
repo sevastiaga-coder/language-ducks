@@ -202,6 +202,7 @@ body {
 }
 
 .playing-panel {
+  position: relative;
   width: 100%;
   background: var(--panel);
   border: var(--edge);
@@ -212,6 +213,56 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 16px;
+}
+
+/* Обратный отсчёт. Цифры — Orbitron, «с» — Rubik. Последние 10 секунд
+   (.urgent) — жёлтый и пульс. Пустой таймер не занимает места. */
+.timer {
+  font-family: var(--font-head);
+  font-weight: 800;
+  color: var(--main);
+  text-shadow: 0 0 14px rgba(53,216,255,.6);
+  line-height: 1;
+}
+
+.timer:empty {
+  display: none;
+}
+
+.timer::after {
+  content: " с";
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: .5em;
+}
+
+.timer.urgent {
+  color: var(--accent);
+  text-shadow: var(--glow-ok);
+  animation: timerPulse 1s ease-in-out infinite;
+}
+
+/* Не крупнее слова задания: оно от 48px (7vw) на экране заданий и 28px на
+   голосовании. Угол панели — чтобы не отнимать высоту у списка. */
+.screen-timer {
+  position: absolute;
+  top: 18px;
+  right: 28px;
+  font-size: clamp(44px, 5vw, 64px);
+}
+
+.vote-timer {
+  font-size: 28px;
+}
+
+.phone-timer {
+  font-size: 26px;
+  text-align: center;
+}
+
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.15); }
 }
 
 .stage-badge {
@@ -678,14 +729,6 @@ body {
 
 .answer-card.correct .answer-card-text {
   color: var(--accent);
-}
-
-.answer-card.missing .answer-card-text {
-  color: var(--text-dim);
-}
-
-.answer-card.missing .answer-card-verdict {
-  color: var(--text-dim);
 }
 
 .scoreboard {
