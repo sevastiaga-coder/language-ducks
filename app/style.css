@@ -1040,13 +1040,13 @@ body {
   border: var(--edge);
   border-radius: var(--radius);
   box-shadow: var(--glow-panel);
-  padding: 14px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  padding: 8px 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
 }
 
-/* Три строки + 10 игроков в окне ~757px: пока панель открыта, соседние
+/* Четыре настройки в две колонки (подпись над кнопками) + 10 игроков в окне ~757px: пока панель открыта, соседние
    блоки на Л1 чуть плотнее, чтобы всё помещалось без прокрутки. */
 .screen:has(#settings-panel:not([hidden])) {
   gap: 12px;
@@ -1058,10 +1058,9 @@ body {
 
 .settings-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .settings-label {
@@ -1078,8 +1077,8 @@ body {
 
 .settings-option {
   min-width: 84px;
-  min-height: 46px;
-  padding: 4px 12px;
+  min-height: 42px;
+  padding: 2px 12px;
   border-radius: var(--radius-s);
   border: 2px solid var(--main);
   background: transparent;

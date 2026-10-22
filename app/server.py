@@ -75,6 +75,7 @@ INTERMISSION_SECONDS = 6.0
 # и game_state["trick_result_seconds"] ниже, и handle_settings).
 DEFAULT_TRANSLATE_RESULT_SECONDS = 5.0
 DEFAULT_TRICK_RESULT_SECONDS = 15.0
+DEFAULT_GUESS_RESULT_SECONDS = 5.0
 # Разрешённые значения для смены длительности показа результатов — любое
 # другое число из /api/settings молча игнорируем (см. handle_settings).
 ALLOWED_RESULT_SECONDS = (5, 10, 15)
@@ -158,7 +159,7 @@ POINTS_TRICK_FOOLED = 100
 # trick_scored_this_word — очки за текущее слово «Обманки» уже начислены
 # (True) или ещё нет (False). Не даёт начислить очки дважды за одно
 # слово, пока сервер держит показ результатов перед следующим.
-# translate_result_seconds / trick_result_seconds — сколько секунд сейчас
+# translate_result_seconds / guess_result_seconds / trick_result_seconds — сколько секунд сейчас
 # держим показ результатов на каждом из этапов. Меняются через
 # handle_settings (шестерёнка на Л1) и, в отличие от всего остального
 # здесь, не сбрасываются ни в reset_to_lobby, ни в handle_restart —
@@ -201,6 +202,7 @@ game_state = {
     "trick_scored_this_word": False,
     "translate_result_seconds": DEFAULT_TRANSLATE_RESULT_SECONDS,
     "trick_result_seconds": DEFAULT_TRICK_RESULT_SECONDS,
+    "guess_result_seconds": DEFAULT_GUESS_RESULT_SECONDS,
     "word_pack": DEFAULT_WORD_PACK,
     "game_word_pack": DEFAULT_WORD_PACK,
 }
@@ -811,7 +813,7 @@ def advance_translate():
 def advance_guess():
     """Как advance_translate, но для «Угадай язык»: начисляет очки за
     раскрытое слово и после показа результатов (тот же
-    translate_result_seconds) идёт к следующему слову или к заставке
+    guess_result_seconds) идёт к следующему слову или к заставке
     перед «Обманкой»."""
     if not game_state["guess_words"]:
         return
@@ -833,7 +835,7 @@ def advance_guess():
                 player["score"] += POINTS_CORRECT
         game_state["guess_scored_this_word"] = True
 
-    if now - reveal_time >= game_state["translate_result_seconds"]:
+    if now - reveal_time >= game_state["guess_result_seconds"]:
         if game_state["guess_index"] + 1 < len(game_state["guess_words"]):
             game_state["guess_index"] += 1
             start_guess_word()
@@ -1058,6 +1060,10 @@ def handle_settings(payload):
     trick_seconds = payload.get("trickResultSeconds")
     if trick_seconds in ALLOWED_RESULT_SECONDS:
         game_state["trick_result_seconds"] = float(trick_seconds)
+
+    guess_seconds = payload.get("guessResultSeconds")
+    if guess_seconds in ALLOWED_RESULT_SECONDS:
+        game_state["guess_result_seconds"] = float(guess_seconds)
 
     # Набор слов: только "classic" или "crazy". Применяется со следующей
     # партии (см. game_word_pack) — слова текущей партии не меняются.
@@ -1398,6 +1404,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 ),
                 "translateResultSeconds": int(game_state["translate_result_seconds"]),
                 "trickResultSeconds": int(game_state["trick_result_seconds"]),
+                "guessResultSeconds": int(game_state["guess_result_seconds"]),
                 "wordPack": game_state["word_pack"],
                 "playerCount": len(game_state["players"]),
                 "players": [player["name"] for player in game_state["players"]],

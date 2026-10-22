@@ -23,6 +23,14 @@
       </div>
     </div>
     <div class="settings-row">
+      <span class="settings-label">Показ результатов «Угадай язык»</span>
+      <div class="settings-options" id="guess-seconds-options">
+        <button class="settings-option" type="button" data-seconds="5">5 сек</button>
+        <button class="settings-option" type="button" data-seconds="10">10 сек</button>
+        <button class="settings-option" type="button" data-seconds="15">15 сек</button>
+      </div>
+    </div>
+    <div class="settings-row">
       <span class="settings-label">Показ результатов «Обманки»</span>
       <div class="settings-options" id="trick-seconds-options">
         <button class="settings-option" type="button" data-seconds="5">5 сек</button>
@@ -337,6 +345,9 @@
     document.querySelectorAll("#translate-seconds-options .settings-option").forEach((btn) => {
       btn.classList.toggle("selected", Number(btn.dataset.seconds) === info.translateResultSeconds);
     });
+    document.querySelectorAll("#guess-seconds-options .settings-option").forEach((btn) => {
+      btn.classList.toggle("selected", Number(btn.dataset.seconds) === info.guessResultSeconds);
+    });
     document.querySelectorAll("#trick-seconds-options .settings-option").forEach((btn) => {
       btn.classList.toggle("selected", Number(btn.dataset.seconds) === info.trickResultSeconds);
     });
@@ -362,6 +373,7 @@
     });
   }
   setupSettingsButtons("translate-seconds-options", "translateResultSeconds");
+  setupSettingsButtons("guess-seconds-options", "guessResultSeconds");
   setupSettingsButtons("trick-seconds-options", "trickResultSeconds");
 
   // Набор слов — те же кнопки, но значение не число секунд, а название набора.
