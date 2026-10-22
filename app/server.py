@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from words import CRAZY_TRICK_WORDS, CRAZY_WORDS, TRICK_WORDS, WORDS
+from words import CRAZY_TRICK_WORDS, CRAZY_WORDS, GUESS_LANGUAGES, GUESS_WORDS, TRICK_WORDS, WORDS
 
 # Дома порт всегда 8000 (см. Играть.command). В интернете (Railway)
 # площадка сама решает, какой порт слушать, и сообщает его через
@@ -54,6 +54,12 @@ MAX_REQUEST_BODY_BYTES = 8192
 TRANSLATE_ANSWER_SECONDS = 40  # ответ на слово в «Переводе»
 TRICK_FIB_SECONDS = 60         # придумывание в «Обманке»
 TRICK_VOTE_SECONDS = 30        # голосование в «Обманке»
+GUESS_ANSWER_SECONDS = 20      # выбор языка в «Угадай язык»
+# Сколько слов в «Угадай язык» и сколько из них может быть на одном языке.
+GUESS_WORDS_PER_GAME = 5
+MAX_GUESS_PER_LANGUAGE = 2
+# Сколько вариантов ответа на телефоне: правильный язык + остальные.
+GUESS_OPTIONS_COUNT = 5
 # Сколько секунд ждём после последнего ответа, прежде чем показать
 # результаты — чтобы последний игрок успел убрать палец от экрана.
 REVEAL_DELAY_SECONDS = 2.0
@@ -92,7 +98,17 @@ POINTS_TRICK_FOOLED = 100
 # "playing" (игра идёт), "final" (финал). Следующие части будут
 # показывать разное в зависимости от этого поля.
 # stage — какой этап игры сейчас идёт: "translate" (этап «Перевод»),
-# "intermission" (заставка между этапами) или "trick" (этап «Обманка»).
+# "guess" (этап «Угадай язык»), "intermission" (заставка между этапами)
+# или "trick" (этап «Обманка»).
+# intermission_next — какой этап начнётся после заставки: "guess" или "trick".
+# guess_words — 5 слов этапа «Угадай язык» (из words.GUESS_WORDS), в
+# порядке показа; guess_index — индекс текущего слова.
+# guess_options — 5 вариантов языка для текущего слова, перемешаны один
+# раз при показе слова (иначе порядок разошёлся бы между телефонами).
+# guess_answers — выбор игроков на текущее слово: id игрока -> название языка.
+# guess_all_time — момент, когда выбрали все (как all_answered_time).
+# guess_scored_this_word — очки за слово уже начислены.
+# previous_guess_words — слова прошлой партии, чтобы не повторять.
 # intermission_time — момент (time.time()), когда началась заставка
 # между этапами. None, пока заставка не показывается. Нужен, чтобы
 # продержать её на экране ровно INTERMISSION_SECONDS и потом самой
@@ -157,7 +173,15 @@ game_state = {
     "phase": "lobby",
     "stage": None,
     "intermission_time": None,
+    "intermission_next": "trick",
     "step_start": None,
+    "guess_words": [],
+    "guess_index": 0,
+    "guess_options": [],
+    "guess_answers": {},
+    "guess_all_time": None,
+    "guess_scored_this_word": False,
+    "previous_guess_words": [],
     "words": [],
     "word_index": 0,
     "answers": {},
@@ -194,6 +218,8 @@ def step_limit_seconds():
         return None
     if game_state["stage"] == "translate":
         return TRANSLATE_ANSWER_SECONDS
+    if game_state["stage"] == "guess":
+        return GUESS_ANSWER_SECONDS
     if game_state["stage"] == "trick":
         if game_state["trick_stage"] == "collecting":
             return TRICK_FIB_SECONDS
@@ -342,6 +368,7 @@ def remove_player(player_id):
             player for player in game_state["players"] if player["id"] != player_id
         ]
         game_state["answers"].pop(player_id, None)
+        game_state["guess_answers"].pop(player_id, None)
         game_state["fibs"].pop(player_id, None)
         game_state["votes"].pop(player_id, None)
 
@@ -359,6 +386,12 @@ def remove_player(player_id):
                 and len(game_state["answers"]) >= len(game_state["players"])
             ):
                 game_state["all_answered_time"] = now
+        elif game_state["stage"] == "guess":
+            if (
+                game_state["guess_all_time"] is None
+                and len(game_state["guess_answers"]) >= len(game_state["players"])
+            ):
+                game_state["guess_all_time"] = now
         elif game_state["stage"] == "trick" and game_state["trick_stage"] == "collecting":
             if (
                 game_state["fibs_all_time"] is None
@@ -371,6 +404,17 @@ def remove_player(player_id):
                 and len(game_state["votes"]) >= len(game_state["players"])
             ):
                 game_state["votes_all_time"] = now
+
+
+def clear_guess_state():
+    """Обнуляет всё, что относится к этапу «Угадай язык»."""
+    game_state["intermission_next"] = "trick"
+    game_state["guess_words"] = []
+    game_state["guess_index"] = 0
+    game_state["guess_options"] = []
+    game_state["guess_answers"] = {}
+    game_state["guess_all_time"] = None
+    game_state["guess_scored_this_word"] = False
 
 
 def reset_to_lobby():
@@ -389,6 +433,8 @@ def reset_to_lobby():
     game_state["scored_this_word"] = False
     game_state["previous_words"] = []
     game_state["previous_trick_words"] = []
+    game_state["previous_guess_words"] = []
+    clear_guess_state()
     game_state["trick_words"] = []
     game_state["trick_index"] = 0
     game_state["fibs"] = {}
@@ -446,6 +492,43 @@ def pick_trick_words(previous_trick_words, word_pack=DEFAULT_WORD_PACK):
     return chosen
 
 
+def pick_guess_words(previous_words):
+    """Выбирает 5 слов на этап «Угадай язык» из GUESS_WORDS: не больше
+    двух слов на один язык и без слов прошлой партии (если свежих не
+    хватает — берём любые). Значения у всех слов разные, поэтому
+    одинаковых по смыслу не будет."""
+    previous_texts = {w["word"] for w in previous_words}
+    pool = [w for w in GUESS_WORDS if w["word"] not in previous_texts]
+    if len(pool) < GUESS_WORDS_PER_GAME * 2:
+        pool = list(GUESS_WORDS)
+    random.shuffle(pool)
+    chosen = []
+    per_language = {}
+    for word in pool:
+        if per_language.get(word["language"], 0) >= MAX_GUESS_PER_LANGUAGE:
+            continue
+        chosen.append(word)
+        per_language[word["language"]] = per_language.get(word["language"], 0) + 1
+        if len(chosen) == GUESS_WORDS_PER_GAME:
+            break
+    return chosen
+
+
+def start_guess_word():
+    """Готовит текущее слово «Угадай язык»: правильный язык + 4 случайных
+    из остальных, всё перемешано один раз здесь — на всех телефонах
+    порядок кнопок одинаковый."""
+    word = game_state["guess_words"][game_state["guess_index"]]
+    others = [lang for lang in GUESS_LANGUAGES if lang != word["language"]]
+    options = random.sample(others, GUESS_OPTIONS_COUNT - 1) + [word["language"]]
+    random.shuffle(options)
+    game_state["guess_options"] = options
+    game_state["guess_answers"] = {}
+    game_state["guess_all_time"] = None
+    game_state["guess_scored_this_word"] = False
+    game_state["step_start"] = time.time()
+
+
 def handle_start(payload):
     """Обрабатывает нажатие «Начать игру» на телефоне ведущего.
 
@@ -469,6 +552,7 @@ def handle_start(payload):
     game_state["step_start"] = time.time()
     game_state["game_word_pack"] = game_state["word_pack"]
     game_state["words"] = pick_round_words(game_state["previous_words"], game_state["game_word_pack"])
+    clear_guess_state()
     game_state["word_index"] = 0
     game_state["answers"] = {}
     game_state["all_answered_time"] = None
@@ -518,6 +602,38 @@ def handle_answer(payload):
         game_state["answers"][player_id] = answer_text
         if len(game_state["answers"]) >= len(game_state["players"]):
             game_state["all_answered_time"] = time.time()
+
+    return {"ok": True}
+
+
+def handle_guess(payload):
+    """Обрабатывает выбор языка на этапе «Угадай язык». Игрок присылает
+    номер кнопки (index) — сервер сам знает, какой язык под этим
+    номером. Один выбор на слово, изменить нельзя."""
+    player_id = payload.get("id")
+    index = payload.get("index")
+
+    if game_state["phase"] != "playing" or game_state["stage"] != "guess":
+        return {"ok": False, "error": "Сейчас не время выбирать"}
+
+    if is_time_up():
+        return {"ok": True}  # время вышло — тихий отказ
+
+    if not any(player["id"] == player_id for player in game_state["players"]):
+        return {"ok": False, "error": "Игрок не найден"}
+
+    if (
+        not isinstance(index, int)
+        or isinstance(index, bool)
+        or index < 0
+        or index >= len(game_state["guess_options"])
+    ):
+        return {"ok": False, "error": "Неверный вариант"}
+
+    if player_id not in game_state["guess_answers"]:
+        game_state["guess_answers"][player_id] = game_state["guess_options"][index]
+        if len(game_state["guess_answers"]) >= len(game_state["players"]):
+            game_state["guess_all_time"] = time.time()
 
     return {"ok": True}
 
@@ -638,6 +754,8 @@ def advance_game():
             return
         if game_state["stage"] == "translate":
             advance_translate()
+        elif game_state["stage"] == "guess":
+            advance_guess()
         elif game_state["stage"] == "intermission":
             advance_intermission()
         elif game_state["stage"] == "trick":
@@ -677,26 +795,69 @@ def advance_translate():
             game_state["scored_this_word"] = False
             game_state["step_start"] = time.time()
         else:
-            # «Перевод» закончился — не сразу «Обманка»: сначала
-            # заставка (часть 12), чтобы за столом успели заметить, что
-            # правила меняются. Слова «Обманки» выбираем уже сейчас,
+            # «Перевод» закончился — не сразу «Угадай язык»: сначала
+            # заставка, чтобы за столом успели заметить, что правила
+            # меняются. Слова следующих этапов выбираем уже сейчас,
             # чтобы они были готовы, как только заставка закончится.
             game_state["stage"] = "intermission"
+            game_state["intermission_next"] = "guess"
             game_state["intermission_time"] = time.time()
+            game_state["guess_words"] = pick_guess_words(game_state["previous_guess_words"])
+            game_state["guess_index"] = 0
             game_state["trick_words"] = pick_trick_words(
                 game_state["previous_trick_words"], game_state["game_word_pack"])
+
+
+def advance_guess():
+    """Как advance_translate, но для «Угадай язык»: начисляет очки за
+    раскрытое слово и после показа результатов (тот же
+    translate_result_seconds) идёт к следующему слову или к заставке
+    перед «Обманкой»."""
+    if not game_state["guess_words"]:
+        return
+    now = time.time()
+    if game_state["guess_all_time"] is None:
+        # Время вышло — закрываем слово с теми ответами, что есть.
+        if now - game_state["step_start"] < GUESS_ANSWER_SECONDS:
+            return
+        game_state["guess_all_time"] = now
+
+    reveal_time = game_state["guess_all_time"] + REVEAL_DELAY_SECONDS
+    if now < reveal_time:
+        return
+
+    if not game_state["guess_scored_this_word"]:
+        current_word = game_state["guess_words"][game_state["guess_index"]]
+        for player in game_state["players"]:
+            if game_state["guess_answers"].get(player["id"]) == current_word["language"]:
+                player["score"] += POINTS_CORRECT
+        game_state["guess_scored_this_word"] = True
+
+    if now - reveal_time >= game_state["translate_result_seconds"]:
+        if game_state["guess_index"] + 1 < len(game_state["guess_words"]):
+            game_state["guess_index"] += 1
+            start_guess_word()
+        else:
+            game_state["stage"] = "intermission"
+            game_state["intermission_next"] = "trick"
+            game_state["intermission_time"] = time.time()
 
 
 def advance_intermission():
     """Держит заставку между этапами на экране ровно
     INTERMISSION_SECONDS, потом сама переключает игру на первое слово
-    «Обманки» (слова уже выбраны заранее, в advance_translate)."""
+    следующего этапа («Угадай язык» или «Обманки», слова уже выбраны
+    заранее, в advance_translate)."""
     if game_state["intermission_time"] is None:
         return
     if time.time() - game_state["intermission_time"] >= INTERMISSION_SECONDS:
-        game_state["stage"] = "trick"
         game_state["intermission_time"] = None
-        game_state["step_start"] = time.time()
+        if game_state["intermission_next"] == "guess":
+            game_state["stage"] = "guess"
+            start_guess_word()
+        else:
+            game_state["stage"] = "trick"
+            game_state["step_start"] = time.time()
 
 
 def advance_trick():
@@ -843,6 +1004,8 @@ def handle_restart(payload):
     # и pick_trick_words используют их, чтобы не повторить в новой партии.
     game_state["previous_words"] = game_state["words"]
     game_state["previous_trick_words"] = game_state["trick_words"]
+    game_state["previous_guess_words"] = game_state["guess_words"]
+    clear_guess_state()
 
     game_state["phase"] = "lobby"
     game_state["stage"] = None
@@ -1038,6 +1201,11 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 word_index_display = game_state["word_index"] + 1
                 word_total_display = len(game_state["words"])
                 submissions = game_state["answers"]
+            elif game_state["phase"] == "playing" and stage == "guess" and game_state["guess_words"]:
+                current_word = game_state["guess_words"][game_state["guess_index"]]
+                word_index_display = game_state["guess_index"] + 1
+                word_total_display = len(game_state["guess_words"])
+                submissions = game_state["guess_answers"]
             elif game_state["phase"] == "playing" and stage == "trick" and game_state["trick_words"]:
                 current_word = game_state["trick_words"][game_state["trick_index"]]
                 word_index_display = game_state["trick_index"] + 1
@@ -1076,6 +1244,36 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 if player_id:
                     my_correct = is_answer_correct(current_word, game_state["answers"].get(player_id))
 
+            # «Угадай язык»: свои поля. Язык слова и перевод до раскрытия
+            # наружу не отдаём вовсе — иначе их можно подсмотреть в
+            # ответе сервера (wordLanguage для этого этапа всегда None).
+            guess_revealed = (
+                stage == "guess"
+                and current_word is not None
+                and game_state["guess_all_time"] is not None
+                and (time.time() - game_state["guess_all_time"]) >= REVEAL_DELAY_SECONDS
+            )
+            guess_results = []
+            my_guess_correct = False
+            guess_correct_language = None
+            guess_translation = None
+            if guess_revealed:
+                guess_correct_language = capitalize_for_display(current_word["language"])
+                guess_translation = current_word["translation"]
+                for player in game_state["players"]:
+                    if player["id"] not in game_state["guess_answers"]:
+                        continue  # не успел — в карточках его нет
+                    chosen = game_state["guess_answers"][player["id"]]
+                    correct = chosen == current_word["language"]
+                    guess_results.append({
+                        "name": player["name"],
+                        "answer": capitalize_for_display(chosen),
+                        "correct": correct,
+                        "points": POINTS_CORRECT if correct else 0,
+                    })
+                if player_id:
+                    my_guess_correct = game_state["guess_answers"].get(player_id) == current_word["language"]
+
             # Таблица очков — от лидера к последнему. При равном счёте
             # порядок как в списке игроков (кто зашёл раньше), а место
             # (rank) у них одинаковое — это честная ничья, а не выдумка.
@@ -1097,6 +1295,8 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             my_points = None
             if revealed and player_id:
                 my_points = POINTS_CORRECT if my_correct else 0
+            if guess_revealed and player_id:
+                my_points = POINTS_CORRECT if my_guess_correct else 0
 
             # Голосование «Обманки» (Л5 + Т4): свои поля, отдельные от
             # answered*/revealed выше — те остаются про «кто уже
@@ -1184,6 +1384,8 @@ class GameRequestHandler(BaseHTTPRequestHandler):
 
             if stage == "translate":
                 closed_time = game_state["all_answered_time"]
+            elif stage == "guess":
+                closed_time = game_state["guess_all_time"]
             elif stage == "trick" and trick_stage == "collecting":
                 closed_time = game_state["fibs_all_time"]
             else:
@@ -1205,13 +1407,25 @@ class GameRequestHandler(BaseHTTPRequestHandler):
                 "wordIndex": word_index_display,
                 "wordTotal": word_total_display,
                 "word": current_word["word"] if current_word else None,
-                "wordLanguage": current_word["language"] if current_word else None,
+                "wordLanguage": current_word["language"] if current_word and stage != "guess" else None,
+                "intermissionNext": game_state["intermission_next"] if stage == "intermission" else None,
+                "guessOptions": [
+                    capitalize_for_display(lang) for lang in game_state["guess_options"]
+                ] if stage == "guess" else [],
+                "guessRevealed": guess_revealed,
+                "guessCorrectLanguage": guess_correct_language,
+                "guessTranslation": guess_translation,
+                "guessResults": guess_results,
+                "myGuessCorrect": my_guess_correct,
                 "answeredNames": answered_names,
                 "answeredCount": len(submissions),
                 "allAnswered": bool(game_state["players"])
                 and len(submissions) >= len(game_state["players"]),
                 "myAnswered": bool(player_id) and player_id in submissions,
-                "myAnswerText": submissions.get(player_id) if player_id else None,
+                "myAnswerText": (
+                    capitalize_for_display(submissions.get(player_id))
+                    if stage == "guess" else submissions.get(player_id)
+                ) if player_id else None,
                 "revealed": revealed,
                 "correctAnswer": current_word["answer"] if revealed else None,
                 "results": results,
@@ -1278,6 +1492,7 @@ class GameRequestHandler(BaseHTTPRequestHandler):
             "/api/join": handle_join,
             "/api/start": handle_start,
             "/api/answer": handle_answer,
+            "/api/guess": handle_guess,
             "/api/fib": handle_fib,
             "/api/vote": handle_vote,
             "/api/restart": handle_restart,

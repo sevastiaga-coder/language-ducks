@@ -38,6 +38,16 @@ async function sendAnswer(playerId, answer) {
   return response.json();
 }
 
+// Игрок выбирает язык (номер кнопки) на этапе «Угадай язык».
+async function sendGuess(playerId, index) {
+  const response = await fetch("/api/guess", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: playerId, index: index }),
+  });
+  return response.json();
+}
+
 // Игрок отправляет выдумку на текущее слово этапа «Обманка».
 async function sendFib(playerId, fib) {
   const response = await fetch("/api/fib", {

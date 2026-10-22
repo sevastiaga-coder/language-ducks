@@ -555,3 +555,82 @@ CRAZY_TRICK_WORDS = [
     {"word": "eldfjall", "language": "исландский", "answer": "вулкан",
      "alternatives": ["огненная гора", "гора огня", "огненные горы", "огнедышащая гора", "горящая гора", "извергающаяся гора", "пламенная гора"]},
 ]
+
+
+# Слова для этапа «Угадай язык»: 6 языков, по 10 слов. Здесь не нужен
+# перевод-ответ, а нужен язык: игрок смотрит на слово и угадывает, на
+# каком оно языке (translation — перевод на русский, показывается только
+# в результатах). Слова выбраны так, чтобы язык можно было угадать по
+# буквам (ł, ř, ä, ș, ư, đ...), но часть — на подумать: польский, чешский
+# и словацкий нарочно похожи. Сербский — только латиницей. Все значения
+# разные. Этап берёт слова только отсюда, независимо от набора слов.
+GUESS_LANGUAGES = ["польский", "румынский", "словацкий", "вьетнамский", "чешский", "сербский"]
+
+GUESS_WORDS = [
+    # Польский
+    {"word": "szczęście", "language": "польский", "translation": "счастье"},
+    {"word": "wiewiórka", "language": "польский", "translation": "белка"},
+    {"word": "łódź", "language": "польский", "translation": "лодка"},
+    {"word": "księżyc", "language": "польский", "translation": "луна"},
+    {"word": "dziewczyna", "language": "польский", "translation": "девушка"},
+    {"word": "jabłko", "language": "польский", "translation": "яблоко"},
+    {"word": "wiatr", "language": "польский", "translation": "ветер"},
+    {"word": "szczotka", "language": "польский", "translation": "щётка"},
+    {"word": "ogień", "language": "польский", "translation": "огонь"},
+    {"word": "ręka", "language": "польский", "translation": "рука"},
+    # Румынский
+    {"word": "pâine", "language": "румынский", "translation": "хлеб"},
+    {"word": "casă", "language": "румынский", "translation": "дом"},
+    {"word": "băiat", "language": "румынский", "translation": "мальчик"},
+    {"word": "ceață", "language": "румынский", "translation": "туман"},
+    {"word": "mâncare", "language": "румынский", "translation": "еда"},
+    {"word": "câine", "language": "румынский", "translation": "собака"},
+    {"word": "țară", "language": "румынский", "translation": "страна"},
+    {"word": "păsăre", "language": "румынский", "translation": "птица"},
+    {"word": "ușă", "language": "румынский", "translation": "дверь"},
+    {"word": "șoarece", "language": "румынский", "translation": "мышь"},
+    # Словацкий
+    {"word": "ďakujem", "language": "словацкий", "translation": "спасибо"},
+    {"word": "mäso", "language": "словацкий", "translation": "мясо"},
+    {"word": "kôň", "language": "словацкий", "translation": "конь"},
+    {"word": "ľad", "language": "словацкий", "translation": "лёд"},
+    {"word": "slnko", "language": "словацкий", "translation": "солнце"},
+    {"word": "stôl", "language": "словацкий", "translation": "стол"},
+    {"word": "dážď", "language": "словацкий", "translation": "дождь"},
+    {"word": "lyžica", "language": "словацкий", "translation": "ложка"},
+    {"word": "pondelok", "language": "словацкий", "translation": "понедельник"},
+    {"word": "ľudia", "language": "словацкий", "translation": "люди"},
+    # Вьетнамский
+    {"word": "nước", "language": "вьетнамский", "translation": "вода"},
+    {"word": "người", "language": "вьетнамский", "translation": "человек"},
+    {"word": "bệnh", "language": "вьетнамский", "translation": "болезнь"},
+    {"word": "sách", "language": "вьетнамский", "translation": "книга"},
+    {"word": "mạnh", "language": "вьетнамский", "translation": "сильный"},
+    {"word": "tuyết", "language": "вьетнамский", "translation": "снег"},
+    {"word": "núi", "language": "вьетнамский", "translation": "гора"},
+    {"word": "rồng", "language": "вьетнамский", "translation": "дракон"},
+    {"word": "chuối", "language": "вьетнамский", "translation": "банан"},
+    {"word": "mẹ", "language": "вьетнамский", "translation": "мама"},
+    # Чешский
+    {"word": "řeka", "language": "чешский", "translation": "река"},
+    {"word": "přítel", "language": "чешский", "translation": "друг"},
+    {"word": "hrnek", "language": "чешский", "translation": "кружка"},
+    {"word": "úsměv", "language": "чешский", "translation": "улыбка"},
+    {"word": "hvězda", "language": "чешский", "translation": "звезда"},
+    {"word": "kočka", "language": "чешский", "translation": "кошка"},
+    {"word": "srdce", "language": "чешский", "translation": "сердце"},
+    {"word": "země", "language": "чешский", "translation": "земля"},
+    {"word": "třešeň", "language": "чешский", "translation": "черешня"},
+    {"word": "čtvrtek", "language": "чешский", "translation": "четверг"},
+    # Сербский (латиницей)
+    {"word": "đak", "language": "сербский", "translation": "ученик"},
+    {"word": "džep", "language": "сербский", "translation": "карман"},
+    {"word": "ćebe", "language": "сербский", "translation": "одеяло"},
+    {"word": "žaba", "language": "сербский", "translation": "лягушка"},
+    {"word": "šuma", "language": "сербский", "translation": "лес"},
+    {"word": "pčela", "language": "сербский", "translation": "пчела"},
+    {"word": "noć", "language": "сербский", "translation": "ночь"},
+    {"word": "čarapa", "language": "сербский", "translation": "носок"},
+    {"word": "dete", "language": "сербский", "translation": "ребёнок"},
+    {"word": "ljubav", "language": "сербский", "translation": "любовь"},
+]

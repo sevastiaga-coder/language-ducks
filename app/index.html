@@ -60,6 +60,15 @@
     <div class="answered-count" id="phone-answered-count"></div>
   </div>
 
+  <div id="guess-view" class="answer-view" hidden>
+    <div class="waiting-name">Ты играешь как <span id="guess-player-name"></span></div>
+    <div class="timer phone-timer" id="guess-timer"></div>
+    <div class="question-number" id="guess-question-number"></div>
+    <div class="task-line">Смотри на слово на большом экране</div>
+    <div class="task-language">Какой это язык?</div>
+    <div class="vote-options-list" id="guess-options-list"></div>
+  </div>
+
   <div id="vote-view" class="answer-view" hidden>
     <div class="waiting-name">Ты играешь как <span id="vote-player-name"></span></div>
     <div class="timer phone-timer" id="vote-timer"></div>
@@ -120,6 +129,9 @@
   const closedView = document.getElementById("closed-view");
   const waitingView = document.getElementById("waiting-view");
   const answerView = document.getElementById("answer-view");
+  const guessView = document.getElementById("guess-view");
+  const guessQuestionNumber = document.getElementById("guess-question-number");
+  const guessOptionsList = document.getElementById("guess-options-list");
   const voteView = document.getElementById("vote-view");
   const voteSubmittedView = document.getElementById("vote-submitted-view");
   const submittedView = document.getElementById("submitted-view");
@@ -195,11 +207,13 @@
   // Список вариантов голосования не пересоздаём на каждый опрос — только
   // когда слово реально сменилось, иначе кнопки мигали бы каждую секунду.
   let lastVoteListKey = null;
+  // То же самое для кнопок языков в «Угадай язык».
+  let lastGuessListKey = null;
 
   // Цифру ведёт createCountdown (app.js); здесь только выводим текст.
   // Последние 10 секунд — класс urgent (жёлтый, пульс).
   const updateCountdown = createCountdown((seconds) => {
-    ["answer-timer", "vote-timer"].forEach((id) => {
+    ["answer-timer", "guess-timer", "vote-timer"].forEach((id) => {
       const el = document.getElementById(id);
       const text = seconds === null ? "" : String(seconds);
       if (el.textContent !== text) {
@@ -217,6 +231,7 @@
     closedView.hidden = true;
     waitingView.hidden = true;
     answerView.hidden = true;
+    guessView.hidden = true;
     voteView.hidden = true;
     voteSubmittedView.hidden = true;
     trickResultView.hidden = true;
@@ -316,11 +331,15 @@
     hideAllViews();
     submittedView.hidden = false;
     const isTrick = info.stage === "trick";
+    const isGuess = info.stage === "guess";
+    // У «Угадай язык» свои «раскрыто» и «угадал» — остальное то же самое.
+    const revealed = isGuess ? info.guessRevealed : info.revealed;
+    const correct = isGuess ? info.myGuessCorrect : info.myCorrect;
     submittedAnswerText.textContent = info.myAnswered ? (info.myAnswerText || "") : "";
     submittedAnsweredCount.textContent =
       (isTrick ? "Придумали " : "Ответили ") + info.answeredCount + " из " + info.playerCount;
 
-    if (!info.revealed && !info.myAnswered) {
+    if (!revealed && !info.myAnswered) {
       // Время вышло, а ответа нет.
       submittedCheck.hidden = true;
       submittedStatus.textContent = "Время вышло";
@@ -330,7 +349,7 @@
       return;
     }
 
-    if (!info.revealed) {
+    if (!revealed) {
       submittedCheck.hidden = false;
       submittedCheck.textContent = "✓";
       submittedCheck.classList.remove("wrong");
@@ -351,8 +370,10 @@
 
     if (!info.myAnswered) {
       submittedStatus.textContent = "Время вышло";
-    } else if (info.myCorrect) {
+    } else if (correct) {
       submittedStatus.textContent = "Ты угадал!";
+    } else if (isGuess) {
+      submittedStatus.textContent = "Мимо, это был " + info.guessCorrectLanguage.toLowerCase();
     } else {
       submittedStatus.textContent = "Мимо";
     }
@@ -361,6 +382,40 @@
     myScoreLine.textContent = "Твои очки: " + info.myScore;
     myRankLine.hidden = false;
     myRankLine.textContent = "Ты на " + info.myRank + " месте";
+  }
+
+  function renderGuessView(info) {
+    hideAllViews();
+    guessView.hidden = false;
+    guessQuestionNumber.textContent = "Слово " + info.wordIndex + " из " + info.wordTotal;
+
+    // Кнопки не пересоздаём на каждый опрос — только когда слово сменилось.
+    const listKey = info.wordIndex + "|" + info.guessOptions.join("|");
+    if (listKey === lastGuessListKey) {
+      return;
+    }
+    lastGuessListKey = listKey;
+    guessOptionsList.innerHTML = "";
+    guessOptionsList.classList.remove("voting-locked");
+    info.guessOptions.forEach((text, index) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vote-btn";
+      btn.textContent = text;
+      btn.addEventListener("click", () => {
+        if (btn.disabled) {
+          return;
+        }
+        // Реакция сразу, как в голосовании: нажатый загорается, остальные гаснут.
+        guessOptionsList.classList.add("voting-locked");
+        guessOptionsList.querySelectorAll(".vote-btn").forEach((otherBtn) => {
+          otherBtn.disabled = true;
+        });
+        btn.classList.add("picked");
+        castGuess(index);
+      });
+      guessOptionsList.appendChild(btn);
+    });
   }
 
   function renderVoteView(info) {
@@ -483,6 +538,12 @@
     if (info.phase === "playing") {
       if (info.stage === "intermission") {
         renderIntermissionView(info);
+      } else if (info.stage === "guess") {
+        if (info.myAnswered || info.guessRevealed || info.secondsLeft === 0) {
+          renderSubmittedView(info);
+        } else {
+          renderGuessView(info);
+        }
       } else if (info.stage === "trick" && info.trickRevealed) {
         renderTrickResultView(info);
       } else if (info.stage === "trick" && info.trickStage === "voting") {
@@ -519,6 +580,7 @@
     leaveBtn.hidden = false;
     playerNameLabel.textContent = name;
     answerPlayerName.textContent = name;
+    document.getElementById("guess-player-name").textContent = name;
     votePlayerName.textContent = name;
     voteSubmittedPlayerName.textContent = name;
     trickResultPlayerName.textContent = name;
@@ -608,6 +670,12 @@
     // показываем отдельно: просто обновляем экран по свежим данным,
     // и он сам покажет то, что сейчас правда происходит.
     void result;
+    const info = await fetchGameInfo(myPlayerId);
+    renderPhase(info);
+  }
+
+  async function castGuess(index) {
+    await sendGuess(myPlayerId, index);
     const info = await fetchGameInfo(myPlayerId);
     renderPhase(info);
   }

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Language Ducks — экран</title>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rubik:wght@400;600;800&family=Exo+2:wght@800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -62,14 +62,43 @@
   </div>
 
   <div class="final-panel" id="intermission-panel" hidden>
-    <div class="winner-label">ЭТАП 2</div>
-    <div class="word cyr">ОБМАНКА</div>
-    <div class="stage-hint">Придумай, что значит слово, и обмани остальных</div>
+    <div class="winner-label" id="intermission-stage"></div>
+    <div class="word cyr" id="intermission-title"></div>
+    <div class="stage-hint" id="intermission-hint"></div>
+  </div>
+
+  <div class="playing-panel" id="guess-panel" hidden>
+    <div class="timer screen-timer" id="guess-timer"></div>
+    <div class="stage-badge">ЭТАП 2 · УГАДАЙ ЯЗЫК</div>
+    <div class="question-number" id="guess-question-number"></div>
+    <div class="stage-hint">Какой это язык? Выбирай на телефоне</div>
+    <div class="word guess-word" id="guess-word"></div>
+    <div class="answered-list" id="guess-answered-list"></div>
+    <div class="answered-count" id="guess-answered-count"></div>
+    <div class="all-answered-note" id="guess-all-answered-note" hidden>Все ответили!</div>
+  </div>
+
+  <div class="reveal-panel" id="guess-reveal-panel" hidden>
+    <div class="reveal-header">
+      <div class="reveal-word guess-word" id="guess-reveal-word"></div>
+      <div class="guess-translation" id="guess-reveal-translation"></div>
+    </div>
+    <div class="real-card" id="guess-real-card">
+      <div class="real-card-badge">ЭТО ЯЗЫК</div>
+      <div class="real-card-text" id="guess-reveal-language"></div>
+    </div>
+    <div class="reveal-body">
+      <div class="reveal-cards" id="guess-reveal-cards"></div>
+      <div class="reveal-side">
+        <div class="scoreboard" id="guess-scoreboard"></div>
+      </div>
+    </div>
+    <div class="next-word-note" id="guess-next-word-note">Следующее слово через несколько секунд</div>
   </div>
 
   <div class="playing-panel" id="fib-panel" hidden>
     <div class="timer screen-timer" id="fib-timer"></div>
-    <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
+    <div class="stage-badge">ЭТАП 3 · ОБМАНКА</div>
     <div class="question-number" id="fib-question-number"></div>
     <div class="stage-hint">Придумай перевод, чтобы все поверили</div>
     <div class="word" id="fib-word"></div>
@@ -81,7 +110,7 @@
 
   <div class="playing-panel" id="vote-panel" hidden>
     <div class="vote-header">
-      <div class="stage-badge">ЭТАП 2 · ОБМАНКА</div>
+      <div class="stage-badge">ЭТАП 3 · ОБМАНКА</div>
       <div class="stage-hint">Где настоящий перевод?</div>
       <div class="timer vote-timer" id="vote-timer"></div>
     </div>
@@ -153,6 +182,8 @@
   let lastVoteKey = null;
   let lastVoteVotedKey = null;
   let lastRevealKey = null;
+  let lastGuessAnsweredKey = null;
+  let lastGuessRevealKey = null;
   let lastTrickRevealKey = null;
   let lastFinalKey = null;
   let lastPhase = null;
@@ -171,6 +202,8 @@
   // тех, кто уже отмечен.
   let translateQuackWordIndex = null;
   let translateQuackedNames = new Set();
+  let guessQuackWordIndex = null;
+  let guessQuackedNames = new Set();
   let fibQuackWordIndex = null;
   let fibQuackedNames = new Set();
   let voteQuackWordIndex = null;
@@ -397,6 +430,8 @@
       if (info.phase === "playing" && lastPhase !== "playing") {
         translateQuackWordIndex = null;
         translateQuackedNames = new Set();
+        guessQuackWordIndex = null;
+        guessQuackedNames = new Set();
         fibQuackWordIndex = null;
         fibQuackedNames = new Set();
         voteQuackWordIndex = null;
@@ -426,6 +461,12 @@
       const revealPanel = document.getElementById("reveal-panel");
       const trickRevealPanel = document.getElementById("trick-reveal-panel");
       const finalPanel = document.getElementById("final-panel");
+      const guessPanel = document.getElementById("guess-panel");
+      const guessRevealPanel = document.getElementById("guess-reveal-panel");
+      // Панели «Угадай язык» прячем всегда, а нужную из них ниже
+      // показывает только ветка этого этапа.
+      guessPanel.hidden = true;
+      guessRevealPanel.hidden = true;
 
       // Логотип во весь рост нужен только пока собираем игроков (Л1) —
       // на игровых экранах он мельче и без свечения, чтобы не спорить
@@ -461,7 +502,33 @@
         return;
       }
 
+      if (info.phase === "playing" && info.stage === "guess") {
+        joinPanel.hidden = true;
+        playersPanel.hidden = true;
+        playingPanel.hidden = true;
+        intermissionPanel.hidden = true;
+        fibPanel.hidden = true;
+        votePanel.hidden = true;
+        revealPanel.hidden = true;
+        trickRevealPanel.hidden = true;
+        finalPanel.hidden = true;
+        if (info.guessRevealed) {
+          guessRevealPanel.hidden = false;
+          renderGuessReveal(info);
+        } else {
+          guessPanel.hidden = false;
+          renderGuess(info);
+        }
+        return;
+      }
+
       if (info.phase === "playing" && info.stage === "intermission") {
+        const nextIsGuess = info.intermissionNext === "guess";
+        document.getElementById("intermission-stage").textContent = nextIsGuess ? "ЭТАП 2" : "ЭТАП 3";
+        document.getElementById("intermission-title").textContent = nextIsGuess ? "УГАДАЙ ЯЗЫК" : "ОБМАНКА";
+        document.getElementById("intermission-hint").textContent = nextIsGuess
+          ? "Смотри на слово и угадай, на каком оно языке"
+          : "Придумай, что значит слово, и обмани остальных";
         joinPanel.hidden = true;
         playersPanel.hidden = true;
         playingPanel.hidden = true;
@@ -580,7 +647,7 @@
   // здесь только выводим текст и крякаем. Каждая цифра 10…1 появляется
   // ровно один раз, поэтому и кряк на неё ровно один.
   function showTimers(seconds) {
-    ["word-timer", "fib-timer", "vote-timer"].forEach((id) => {
+    ["word-timer", "guess-timer", "fib-timer", "vote-timer"].forEach((id) => {
       const el = document.getElementById(id);
       const text = seconds === null ? "" : String(seconds);
       if (el.textContent !== text) {
@@ -634,6 +701,116 @@
     document.getElementById("answered-count").textContent =
       "Ответили " + info.answeredCount + " из " + info.players.length;
     document.getElementById("all-answered-note").hidden = !info.allAnswered;
+  }
+
+  function renderGuess(info) {
+    document.getElementById("guess-question-number").textContent =
+      "Слово " + info.wordIndex + " из " + info.wordTotal;
+    // Слово этапа всегда одним шрифтом (.guess-word, см. style.css) —
+    // никаких .cyr и запасных шрифтов, иначе язык выдаст сам шрифт.
+    document.getElementById("guess-word").textContent = info.word || "";
+
+    if (info.wordIndex !== guessQuackWordIndex) {
+      guessQuackWordIndex = info.wordIndex;
+      guessQuackedNames = new Set();
+    }
+    quackForNewNames(info.answeredNames, guessQuackedNames);
+
+    const answeredKey = info.wordIndex + "|" + info.players.join(",") + "|" +
+      info.answeredNames.slice().sort().join(",");
+    if (answeredKey !== lastGuessAnsweredKey) {
+      lastGuessAnsweredKey = answeredKey;
+      const answeredList = document.getElementById("guess-answered-list");
+      answeredList.innerHTML = "";
+      info.players.forEach((name) => {
+        const item = document.createElement("div");
+        const answered = info.answeredNames.includes(name);
+        item.className = "answered-name" + (answered ? " answered" : "");
+        item.textContent = (answered ? "✓ " : "") + name;
+        answeredList.appendChild(item);
+      });
+    }
+
+    document.getElementById("guess-answered-count").textContent =
+      "Ответили " + info.answeredCount + " из " + info.players.length;
+    document.getElementById("guess-all-answered-note").hidden = !info.allAnswered;
+  }
+
+  function renderGuessReveal(info) {
+    document.getElementById("guess-reveal-word").textContent = info.word || "";
+    document.getElementById("guess-reveal-translation").textContent =
+      info.guessTranslation ? "— " + info.guessTranslation : "";
+    document.getElementById("guess-reveal-language").textContent = info.guessCorrectLanguage || "";
+
+    const isLastWord = info.wordIndex >= info.wordTotal;
+    document.getElementById("guess-next-word-note").textContent =
+      isLastWord ? "Дальше новый этап" : "Следующее слово через несколько секунд";
+
+    // Как и в renderReveal: пересоздаём карточки только если что-то изменилось.
+    const revealKey = info.word + "|" + JSON.stringify(info.guessResults) + "|" + JSON.stringify(info.scoreboard);
+    if (revealKey === lastGuessRevealKey) {
+      return;
+    }
+    lastGuessRevealKey = revealKey;
+
+    const cardsContainer = document.getElementById("guess-reveal-cards");
+    cardsContainer.innerHTML = "";
+    // До четырёх карточек — один столбец, от пяти — два, от семи — три.
+    cardsContainer.classList.remove("two-col", "three-col");
+    if (info.guessResults.length > 6) {
+      cardsContainer.classList.add("three-col");
+    } else if (info.guessResults.length > 4) {
+      cardsContainer.classList.add("two-col");
+    }
+    info.guessResults.forEach((result, index) => {
+      const card = document.createElement("div");
+      card.className = "answer-card" + (result.correct ? " correct" : "");
+      card.style.animationDelay = (index * 150) + "ms";
+
+      const infoBlock = document.createElement("div");
+      infoBlock.className = "answer-card-info";
+      const nameEl = document.createElement("div");
+      nameEl.className = "answer-card-name";
+      nameEl.textContent = result.name;
+      const textEl = document.createElement("div");
+      textEl.className = "answer-card-text";
+      textEl.textContent = result.answer;
+      infoBlock.appendChild(nameEl);
+      infoBlock.appendChild(textEl);
+
+      const right = document.createElement("div");
+      right.className = "answer-card-right";
+      const verdict = document.createElement("div");
+      verdict.className = "answer-card-verdict";
+      if (result.correct) {
+        verdict.textContent = "ВЕРНО";
+      }
+      const points = document.createElement("div");
+      points.className = "answer-card-points" + (result.points > 0 ? "" : " zero");
+      points.textContent = "+" + result.points;
+      right.appendChild(verdict);
+      right.appendChild(points);
+
+      card.appendChild(infoBlock);
+      card.appendChild(right);
+      cardsContainer.appendChild(card);
+    });
+
+    const scoreboardContainer = document.getElementById("guess-scoreboard");
+    scoreboardContainer.innerHTML = "";
+    const topScore = info.scoreboard.length ? info.scoreboard[0].score : -1;
+    info.scoreboard.forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "scoreboard-row" + (entry.score === topScore ? " leader" : "");
+      const nameEl = document.createElement("div");
+      nameEl.textContent = entry.name;
+      const scoreEl = document.createElement("div");
+      scoreEl.className = "scoreboard-score";
+      scoreEl.textContent = entry.score;
+      row.appendChild(nameEl);
+      row.appendChild(scoreEl);
+      scoreboardContainer.appendChild(row);
+    });
   }
 
   function renderFib(info) {

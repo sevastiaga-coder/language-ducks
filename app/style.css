@@ -71,6 +71,7 @@ body {
    на каждый. Шире общего экрана — меньше переносов строк, значит
    ниже карточки. Остальные экраны не трогаем, чтобы не расшатать их. */
 .screen:has(#trick-reveal-panel:not([hidden])),
+.screen:has(#guess-reveal-panel:not([hidden])),
 .screen:has(#vote-panel:not([hidden])) {
   max-width: 1380px;
 }
@@ -341,6 +342,66 @@ body {
 .task-word.cyr {
   font-family: var(--font-body);
   font-weight: 800;
+}
+
+/* Слово этапа «Угадай язык» — ВСЕГДА один шрифт, Exo 2: в нём есть
+   латиница, latin-ext (польский, чешский, словацкий, румынский,
+   сербский) и вьетнамский. С Orbitron или Rubik часть слов уходила бы
+   в запасной шрифт, и язык выдавал бы сам вид букв. */
+.word.guess-word,
+.reveal-word.guess-word {
+  font-family: "Exo 2", "Trebuchet MS", system-ui, sans-serif;
+  font-weight: 800;
+}
+
+.reveal-word.guess-word {
+  font-size: 48px;
+}
+
+.guess-translation {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 32px;
+  color: var(--main);
+}
+
+#guess-real-card .real-card-text {
+  font-size: 44px;
+  line-height: 1.1;
+}
+
+/* Итог «Угадай язык» при 10 игроках — тесный экран (в каждой карточке
+   длинное слово вроде «Вьетнамский», а таблица очков стоит сбоку),
+   поэтому всё сжато плотнее, чем у «Перевода»: карточки в три столбца
+   от семи, строки таблицы ниже, шрифты не меньше 26px там, где это
+   смысл (язык, очки), а имя игрока — 22px. */
+#guess-reveal-panel {
+  padding: 12px 20px;
+  gap: 8px;
+}
+
+#guess-reveal-cards {
+  flex: 4;
+}
+
+#guess-reveal-cards .answer-card {
+  padding: 8px 14px;
+}
+
+#guess-reveal-cards .answer-card-name {
+  font-size: 22px;
+}
+
+#guess-reveal-cards .answer-card-text {
+  font-size: 26px;
+}
+
+#guess-scoreboard {
+  gap: 4px;
+}
+
+#guess-scoreboard .scoreboard-row {
+  padding: 4px 16px;
 }
 
 .word-language {
